@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-gradient-to-b from-black to-zinc-950 text-white min-h-screen antialiased;
+  }
+}
+
+/* Glassmorphism utilities if needed, though mostly inline in components */
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl;
+}
