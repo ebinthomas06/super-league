@@ -21,8 +21,19 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 2. EXCEPTION: Let the login route pass through freely!
+ // 2. EXCEPTIONS: Let specific routes pass through!
   if (request.nextUrl.pathname === '/api/auth/login') {
+    return NextResponse.next();
+  }
+
+  // Allow public voting, but rate-limit it by IP so fans can't spam it!
+  if (request.nextUrl.pathname === '/api/polls/vote') {
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const voteLimitCheck = checkRateLimit(`vote_${ip}`, 5, 60 * 1000);
+    
+    if (!voteLimitCheck.success) {
+      return NextResponse.json({ success: false, message: 'Too Many Votes' }, { status: 429 });
+    }
     return NextResponse.next();
   }
 
