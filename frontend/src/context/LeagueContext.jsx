@@ -4,10 +4,19 @@ const LeagueContext = createContext(undefined);
 
 export function LeagueProvider({ children }) {
   const [division, setDivision] = useState('mens'); // 'mens' | 'womens'
-  const [view, setView] = useState('home'); // 'home' | 'matches' | 'standings' | 'players' | 'news' | 'legends' | 'rules'
+  const [view, setView] = useState('home'); // 'home' | 'matches' | 'standings' | 'teams' | 'fantasy' | 'leaderboard' | 'news' | 'legends' | 'rules' | 'login'
+  const [fantasyPrediction, setFantasyPrediction] = useState(null);
+  const [globalPollState, setGlobalPollState] = useState({ mens: null, womens: null });
+  const [selectedArticle, setSelectedArticle] = useState(null);
 
   return (
-    <LeagueContext.Provider value={{ division, setDivision, view, setView }}>
+    <LeagueContext.Provider value={{ 
+      division, setDivision, 
+      view, setView, 
+      fantasyPrediction, setFantasyPrediction, 
+      globalPollState, setGlobalPollState,
+      selectedArticle, setSelectedArticle 
+    }}>
       {children}
     </LeagueContext.Provider>
   );

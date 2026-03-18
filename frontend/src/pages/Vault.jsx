@@ -1,10 +1,30 @@
 import { useLeague } from '../context/LeagueContext';
-import { mockData } from '../data/mockData';
+import { useApi } from '../hooks/useApi';
 import { NewsArticle } from '../components/NewsArticle';
+import { Loader2 } from 'lucide-react';
 
 export function Vault() {
   const { division } = useLeague();
-  const articles = mockData[division].vault;
+  const { data: apiResponse, loading, error } = useApi('/news');
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 animate-pulse space-y-4">
+        <Loader2 className="w-12 h-12 animate-spin text-white/20" />
+        <span className="font-black tracking-[0.3em] uppercase text-sm">Fetching Latest Stories...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-red-500/80 space-y-4">
+        <span className="font-black tracking-[0.3em] uppercase text-sm">Publishing Server Offline</span>
+      </div>
+    );
+  }
+
+  const articles = apiResponse?.data || [];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
