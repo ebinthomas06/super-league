@@ -1,8 +1,8 @@
 import { cn } from '../utils/cn'; 
 
-export function GlassPanel({ children, className = '' }) {
+export function GlassPanel({ children, className = '', ...props }) {
   return (
-    <div className={cn("bg-white/5 backdrop-blur-md border border-white/10 rounded-xl", className)}>
+    <div className={cn("bg-white/5 backdrop-blur-md border border-white/10 rounded-xl", className)} {...props}>
       {children}
     </div>
   );

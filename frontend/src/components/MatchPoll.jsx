@@ -1,28 +1,56 @@
 import { useState, useEffect } from 'react';
 import { GlassPanel } from './GlassPanel';
+import { useLeague } from '../context/LeagueContext';
+import { ArrowRight } from 'lucide-react';
 
 export function MatchPoll({ homeTeam, awayTeam, initialHomePercent, initialAwayPercent }) {
-  const [voted, setVoted] = useState(false);
-  const [percents, setPercents] = useState({ home: initialHomePercent, away: initialAwayPercent });
+  const { setView, setFantasyPrediction, view, globalPollState, setGlobalPollState, division } = useLeague();
+  
+  const currentPoll = globalPollState[division];
+  
+  const [voted, setVoted] = useState(!!currentPoll);
+  const [percents, setPercents] = useState(
+    currentPoll ? currentPoll.finalPercents : { home: initialHomePercent, away: initialAwayPercent }
+  );
 
   useEffect(() => {
-    setVoted(false);
-    setPercents({ home: initialHomePercent, away: initialAwayPercent });
-  }, [homeTeam, awayTeam, initialHomePercent, initialAwayPercent]);
+    if (currentPoll) {
+      setVoted(true);
+      setPercents(currentPoll.finalPercents);
+    } else {
+      setVoted(false);
+      setPercents({ home: initialHomePercent, away: initialAwayPercent });
+    }
+  }, [currentPoll, initialHomePercent, initialAwayPercent]);
 
   const handleVote = (team) => {
     if (voted) return;
     setVoted(true);
+    setFantasyPrediction(team);
+    
+    let newPercents;
     if (team === 'home') {
-      setPercents(p => ({ home: Math.min(99, p.home + 2), away: Math.max(1, p.away - 2) }));
+      newPercents = { home: Math.min(99, percents.home + 2), away: Math.max(1, percents.away - 2) };
     } else {
-      setPercents(p => ({ home: Math.max(1, p.home - 2), away: Math.min(99, p.away + 2) }));
+      newPercents = { home: Math.max(1, percents.home - 2), away: Math.min(99, percents.away + 2) };
+    }
+    
+    setPercents(newPercents);
+    setGlobalPollState(prev => ({ 
+      ...prev, 
+      [division]: { hasVoted: true, selection: team, finalPercents: newPercents } 
+    }));
+    
+    if (view !== 'fantasy') {
+      setView('fantasy');
     }
   };
 
   return (
     <GlassPanel className="p-6 sm:p-8">
-      <h3 className="text-lg sm:text-xl font-bold tracking-widest text-center mb-6 text-zinc-300">WHO TAKES THE POINTS?</h3>
+      <h3 className="text-lg sm:text-xl font-bold tracking-widest text-center mb-6 text-zinc-300">
+        WHO TAKES THE POINTS?
+      </h3>
       <div className="flex flex-col gap-4">
         {!voted ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -67,6 +95,16 @@ export function MatchPoll({ homeTeam, awayTeam, initialHomePercent, initialAwayP
               </div>
             </div>
           </div>
+        )}
+        
+        {view !== 'fantasy' && (
+          <button
+            onClick={() => setView('fantasy')}
+            className="mt-6 w-full py-3 sm:py-4 bg-white text-black hover:bg-zinc-200 font-bold text-lg tracking-widest uppercase rounded-xl transition-all duration-300 flex items-center justify-center gap-3 group drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] hover:drop-shadow-[0_0_20px_rgba(255,255,255,0.4)]"
+          >
+            Predict & Win
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
         )}
       </div>
     </GlassPanel>

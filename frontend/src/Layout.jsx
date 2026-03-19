@@ -2,8 +2,12 @@ import { useLeague } from './context/LeagueContext';
 import { TopNavbar } from './components/TopNavbar';
 import { Home } from './pages/Home';
 import { Standings } from './pages/Standings';
-import { Players } from './pages/Players';
+import { Teams } from './pages/Teams';
+import { Fantasy } from './pages/Fantasy';
+import { Leaderboard } from './pages/Leaderboard';
 import { Vault } from './pages/Vault';
+import { Login } from './pages/Login';
+import { ArticleView } from './pages/ArticleView';
 
 export function Layout() {
   const { view } = useLeague();
@@ -12,8 +16,12 @@ export function Layout() {
     switch(view) {
       case 'home': return <Home />;
       case 'standings': return <Standings />;
-      case 'players': return <Players />;
+      case 'teams': return <Teams />;
+      case 'fantasy': return <Fantasy />;
+      case 'leaderboard': return <Leaderboard />;
+      case 'login': return <Login />;
       case 'vault': return <Vault />;
+      case 'article': return <ArticleView />;
       default:
         return (
           <div className="flex-1 flex items-center justify-center min-h-[50vh]">

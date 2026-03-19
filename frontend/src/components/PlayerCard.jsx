@@ -2,16 +2,12 @@ import { GlassPanel } from './GlassPanel';
 
 export function PlayerCard({ player }) {
   return (
-    <GlassPanel className="p-5 flex flex-col items-center group cursor-pointer hover:scale-105 transition-all duration-300 hover:border-white/30 relative overflow-hidden bg-gradient-to-br from-[#111] to-black">
+    <GlassPanel className="p-5 flex flex-col items-center group cursor-pointer hover:scale-105 active:scale-[0.98] transition-all duration-300 hover:border-white/30 relative overflow-hidden bg-gradient-to-br from-[#111] to-black">
       {/* Decorative metallic sheen */}
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
       
       <div className="w-28 h-28 rounded-full overflow-hidden border border-white/20 mb-5 group-hover:border-white/50 transition-colors bg-zinc-900 shadow-2xl">
-        <img 
-          src={player.imgUrl} 
-          alt={player.name} 
-          className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-110" 
-        />
+          className="w-full h-full object-cover md:grayscale md:opacity-80 md:group-hover:grayscale-0 md:group-hover:opacity-100 transition-all duration-500 transform md:group-hover:scale-110" 
       </div>
       
       <h4 className="text-xl font-black tracking-tight text-white mb-1 whitespace-nowrap">{player.name}</h4>
