@@ -3,16 +3,19 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../lib/errorHandler';
 
+// Turn off caching so the admin sees live updates instantly!
+export const revalidate = 0;
+
 // 1. THE MAGIC FIX: Teach the client to read the Auth Header!
 async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
-  const authHeader = request.headers.get('Authorization'); // Grab the VIP Pass from the frontend!
+  const authHeader = request.headers.get('Authorization'); 
 
   return createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
     cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     global: {
       headers: {
-        Authorization: authHeader || '', // Force Supabase to use the token!
+        Authorization: authHeader || '', 
       },
     },
   });
@@ -25,7 +28,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
     const division = searchParams.get('division') || 'mens';
 
-    const supabase = await getSupabaseClient(request); // <--- Pass request here!
+    const supabase = await getSupabaseClient(request); 
 
     let query = supabase
       .from('matches')
@@ -51,13 +54,19 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    const formattedData = data?.map((m:any) => ({
-      ...m,
-      home_team_id: m.home?.id || m.home_team_id,
-      away_team_id: m.away?.id || m.away_team_id,
-      home_team_name: m.home?.name || 'Unknown',
-      away_team_name: m.away?.name || 'Unknown'
-    }));
+    const formattedData = data?.map((m:any) => {
+      // MAGIC FIX: Check if Supabase returned an array or an object!
+      const homeData = Array.isArray(m.home) ? m.home[0] : m.home;
+      const awayData = Array.isArray(m.away) ? m.away[0] : m.away;
+
+      return {
+        ...m,
+        home_team_id: homeData?.id || m.home_team_id,
+        away_team_id: awayData?.id || m.away_team_id,
+        home_team_name: homeData?.name || 'Unknown',
+        away_team_name: awayData?.name || 'Unknown'
+      };
+    });
 
     return NextResponse.json({ success: true, data: formattedData });
   } catch (error) {
@@ -69,7 +78,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const supabase = await getSupabaseClient(request); // <--- Pass request here!
+    const supabase = await getSupabaseClient(request); 
 
     const { data, error } = await supabase
       .from('matches')

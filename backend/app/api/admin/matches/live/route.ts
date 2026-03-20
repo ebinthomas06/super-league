@@ -90,14 +90,17 @@ export async function POST(request: Request) {
           const currentScorers = match.scorers || [];
           updatePayload.scorers = [...currentScorers, player_id];
 
-          // Log the assist if it exists
+          // MAGIC FIX: Log the assist AND update the player's permanent stats!
           if (body.assist_id) {
             const currentAssists = match.assists || [];
             updatePayload.assists = [...currentAssists, body.assist_id];
+
+            // Grab the assisting player's current tally and add 1
+            const { data: assistPlayer } = await supabase.from('players').select('assists').eq('id', body.assist_id).single();
+            await supabase.from('players').update({ assists: (assistPlayer?.assists || 0) + 1 }).eq('id', body.assist_id);
           }
           responseMessage = "Goal registered successfully!";
         }
-        
         updatePayload.status = 'live';
         
         // (Optional) If you have an is_own_goal column in your goals table, you can pass it here later!

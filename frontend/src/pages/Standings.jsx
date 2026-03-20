@@ -11,18 +11,48 @@ function MatchCard({ title, team1, team2, note1, note2 }) {
       <div className="space-y-2">
         <div className="flex justify-between items-center bg-black/40 rounded-lg p-2 px-3 border border-white/5">
           <span className="font-bold text-white text-sm truncate mr-2">{team1}</span>
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest whitespace-nowrap">{note1}</span>
+          <span className="text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">{note1}</span>
         </div>
         <div className="flex justify-between items-center bg-black/40 rounded-lg p-2 px-3 border border-white/5">
           <span className="font-bold text-white text-sm truncate mr-2">{team2}</span>
-          <span className="text-[10px] text-zinc-500 uppercase tracking-widest whitespace-nowrap">{note2}</span>
+          <span className="text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">{note2}</span>
         </div>
       </div>
     </div>
   );
 }
 
-function WomensBracket() {
+// 1. UPDATED BRACKET: Now it reads real data from the database!
+function WomensBracket({ matches = [] }) {
+  
+  // Helper function to safely map chronologically scheduled games to the bracket slots
+  const getMatchData = (index, fallbackHome, fallbackAway, fallbackNote1, fallbackNote2) => {
+    const m = matches[index];
+    if (!m) return { team1: fallbackHome, team2: fallbackAway, note1: fallbackNote1, note2: fallbackNote2 };
+    
+    // If the game is live or finished, show the real score!
+    const showScore = m.status === 'live' || m.status === 'completed';
+    
+    // Extract team names safely (fixing the TypeScript array issue from earlier!)
+    const homeName = Array.isArray(m.home) ? m.home[0]?.name : m.home?.name;
+    const awayName = Array.isArray(m.away) ? m.away[0]?.name : m.away?.name;
+
+    return {
+      team1: homeName || fallbackHome,
+      team2: awayName || fallbackAway,
+      note1: showScore ? m.home_score : fallbackNote1,
+      note2: showScore ? m.away_score : fallbackNote2
+    };
+  };
+
+  const q1 = getMatchData(0, "Kulasthree FC", "FAAAH United", "", "");
+  const q2 = getMatchData(1, "DILF", "Red Wolves", "", "");
+  const e1 = getMatchData(2, "Loser of Q1", "Loser of Q2", "", "");
+  const s1 = getMatchData(3, "Fivestars", "Winner of Q1", "", "");
+  const s2 = getMatchData(4, "Winner of Q2", "Winner of E1", "", "");
+  const final = getMatchData(5, "Winner of Semi 1", "Winner of Semi 2", "Champ", "Runner Up");
+  const losers = getMatchData(6, "Loser of Semi 1", "Loser of Semi 2", "3rd", "");
+
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-12">
       <div className="text-center space-y-4">
@@ -35,84 +65,26 @@ function WomensBracket() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
-        
-        {/* Stage 1 */}
         <div className="space-y-6">
           <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">1. Qualifiers</h3>
-          <MatchCard 
-            title="Qualifier 1" 
-            team1="Kulasthree FC" note1=""
-            team2="FAAAH United" note2=""
-            borderClass="border-yellow-500/20"
-            gradClass="from-yellow-500/50"
-            textClass="text-yellow-500"
-          />
-          <MatchCard 
-            title="Qualifier 2" 
-            team1="DILF" note1=""
-            team2="Red Wolves" note2=""
-            borderClass="border-yellow-500/20"
-            gradClass="from-yellow-500/50"
-            textClass="text-yellow-500"
-          />
+          <MatchCard title="Qualifier 1" {...q1} />
+          <MatchCard title="Qualifier 2" {...q2} />
         </div>
-
-        {/* Stage 2 */}
         <div className="space-y-6">
           <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">2. Eliminator</h3>
           <div className="hidden lg:block h-[112px]"></div>
-          <MatchCard 
-            title="Eliminator 1" 
-            team1="Loser of Q1" note1=""
-            team2="Loser of Q2" note2=""
-            borderClass="border-red-500/20"
-            gradClass="from-red-500/50"
-            textClass="text-red-500"
-          />
+          <MatchCard title="Eliminator 1" {...e1} />
         </div>
-
-        {/* Stage 3 */}
         <div className="space-y-6">
           <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">3. Semifinals</h3>
-          <MatchCard 
-            title="Semifinal 1" 
-            team1="Fivestars" note1=""
-            team2="Winner of Q1" note2=""
-            borderClass="border-cyan-400/20"
-            gradClass="from-cyan-400/50"
-            textClass="text-cyan-400"
-          />
-          <MatchCard 
-            title="Semifinal 2" 
-            team1="Winner of Q2" note1=""
-            team2="Winner of E1" note2=""
-            borderClass="border-cyan-400/20"
-            gradClass="from-cyan-400/50"
-            textClass="text-cyan-400"
-          />
+          <MatchCard title="Semifinal 1" {...s1} />
+          <MatchCard title="Semifinal 2" {...s2} />
         </div>
-
-        {/* Stage 4 */}
         <div className="space-y-6">
           <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">4. Finals</h3>
-          <MatchCard 
-            title="Final" 
-            team1="Winner of Semi 1" note1="Champion"
-            team2="Winner of Semi 2" note2="Runner Up"
-            borderClass="border-yellow-300/30"
-            gradClass="from-yellow-300/60"
-            textClass="text-yellow-300"
-          />
-          <MatchCard 
-            title="Losers Final" 
-            team1="Loser of Semi 1" note1="3rd Place"
-            team2="Loser of Semi 2" note2=""
-            borderClass="border-zinc-400/20"
-            gradClass="from-zinc-400/50"
-            textClass="text-zinc-400"
-          />
+          <MatchCard title="Final" {...final} />
+          <MatchCard title="Losers Final" {...losers} />
         </div>
-
       </div>
     </div>
   );
@@ -120,10 +92,14 @@ function WomensBracket() {
 
 export function Standings() {
   const { division } = useLeague();
-  const { data: apiResponse, loading, error } = useApi('/standings');
+  
+  const { data: apiResponse, loading, error } = useApi(`/standings?division=${division}`);
+  
+  // 2. We extract the bracketMatches from the backend and pass it to the component!
+  const bracketMatches = apiResponse?.data?.bracketMatches || [];
   
   if (division === 'womens') {
-    return <WomensBracket />;
+    return <WomensBracket matches={bracketMatches} />;
   }
 
   if (loading) {
@@ -146,8 +122,7 @@ export function Standings() {
     );
   }
 
-  // Support both isolated data object arrays or encapsulated wrappers
-  const standings = apiResponse?.data?.standings || apiResponse?.data || [];
+  const standings = apiResponse?.data?.standings || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-12">
@@ -179,7 +154,7 @@ export function Standings() {
               const promotes = idx < 4;
               return (
                 <div 
-                  key={team.teamId} // Changed from team.club
+                  key={team.teamId}
                   className={`
                     grid grid-cols-[4rem_1.5fr_3rem_3rem_3rem_3rem_3rem_3rem_3rem_4rem_10rem] gap-2 p-4 items-center 
                     ${idx !== standings.length - 1 ? 'border-b border-white/5' : ''} 
@@ -189,10 +164,11 @@ export function Standings() {
                 >
                   <div className="font-mono text-xl font-bold text-center text-zinc-400">{team.rank}</div>
                   
-                  {/* Changed to teamName */}
-                  <div className="font-bold text-lg">{team.teamName}</div>
+                  <div className="font-bold text-lg flex items-center gap-3">
+                    {team.logoUrl && <img src={team.logoUrl} className="w-6 h-6 object-contain" alt={team.teamName} />}
+                    {team.teamName}
+                  </div>
                   
-                  {/* Mapped all stats to team.stats object with optional chaining */}
                   <div className="text-center text-zinc-400">{team.stats?.matchesPlayed || 0}</div>
                   <div className="text-center text-zinc-400">{team.stats?.won || 0}</div>
                   <div className="text-center text-zinc-400">{team.stats?.drawn || 0}</div>
@@ -200,20 +176,18 @@ export function Standings() {
                   <div className="text-center text-zinc-400">{team.stats?.goalsFor || 0}</div>
                   <div className="text-center text-zinc-400">{team.stats?.goalsAgainst || 0}</div>
                   
-                  {/* Safely handle Goal Difference */}
                   <div className="text-center font-mono text-zinc-300">
                     {team.stats?.goalDifference > 0 ? `+${team.stats?.goalDifference}` : (team.stats?.goalDifference || 0)}
                   </div>
                   
-                  {/* Points */}
                   <div className="text-center font-black text-2xl">{team.stats?.points || 0}</div>
                   
                   <div className="pl-4 hidden sm:block">
-                    <FormGuide form={team.form || []} />
+                    {/* Slice (-5) works perfectly now because the oldest matches are first in the array! */}
+                    <FormGuide form={(team.form || []).slice(-5)} />
                   </div>
-                  {/* Small form indicator for tiny screens */}
                   <div className="pl-4 block sm:hidden text-xs tracking-widest text-zinc-400">
-                    {(team.form || []).join('')}
+                    {(team.form || []).slice(-5).join('')}
                   </div>
                 </div>
               );

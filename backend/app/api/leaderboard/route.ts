@@ -3,11 +3,15 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../lib/errorHandler'; 
 
-// Cache this public route for 60 seconds to keep the app blazing fast
-export const revalidate = 60; 
+// Turn off caching temporarily so you can test the Mens/Womens toggle instantly!
+export const revalidate = 0; 
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Grab the division from the URL (e.g., ?division=mens)
+    const { searchParams } = new URL(request.url);
+    const division = searchParams.get('division') || 'mens';
+
     const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
@@ -22,19 +26,34 @@ export async function GET() {
       }
     );
 
-    // Fetch from our upgraded view that now includes 'assists'
-    const { data, error } = await supabase
+    // 1. Fetch Top 10 Scorers for the specific division
+    const { data: topScorers, error: scorersErr } = await supabase
       .from('top_scorers')
       .select('*')
-      .order('goalsScored', { ascending: false }) // Primary sort by goals
+      .eq('division', division)
+      .order('goalsScored', { ascending: false })
       .limit(10); 
 
-    if (error) throw error;
+    if (scorersErr) throw scorersErr;
 
+    // 2. Fetch Top 10 Assists for the specific division
+    const { data: topAssists, error: assistsErr } = await supabase
+      .from('top_scorers')
+      .select('*')
+      .eq('division', division)
+      .order('assists', { ascending: false })
+      .limit(10); 
+
+    if (assistsErr) throw assistsErr;
+
+    // Send both lists neatly packaged together!
     return NextResponse.json({
       success: true,
       message: "Leaderboard fetched successfully",
-      data: data
+      data: {
+        topScorers: topScorers || [],
+        topAssists: topAssists || []
+      }
     });
 
   } catch (error) {

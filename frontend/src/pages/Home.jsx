@@ -3,7 +3,7 @@ import { useApi } from '../hooks/useApi';
 import { GlassPanel } from '../components/GlassPanel';
 import { FormGuide } from '../components/FormGuide';
 import { NewsArticle } from '../components/NewsArticle';
-import { ChevronRight, Trophy, Goal, Zap, Loader2 } from 'lucide-react';
+import { ChevronRight, Trophy, Goal, Zap, Loader2, Calendar } from 'lucide-react';
 
 function SectionHeader({ title, action, onAction }) {
   return (
@@ -46,8 +46,6 @@ export function Home() {
   }
 
   const data = apiResponse?.data || {};
-  
-  // Note: Future feature flag to fetch /womens endpoints when DB supports it.
   const match = data.liveMatch;
   const top4 = data.standings || [];
   const newsItems = data.news || [];
@@ -55,46 +53,86 @@ export function Home() {
   const topScorer = data.topScorer;
   const topAssist = data.topAssist;
 
-  if (!match) return null;
-
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-12 overflow-x-hidden">
       
-      {/* Hero Section: Live Match (Command Center Style) */}
-      <GlassPanel className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 animate-fade-up opacity-0 stagger-1">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/5 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
-        
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="flex items-center gap-4 mb-10 sm:mb-16 px-6 py-2.5 rounded-full bg-black/80 border border-white/20 backdrop-blur-xl shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-            <div className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </div>
-            <span className="text-xs sm:text-sm font-black tracking-[0.3em] text-white">LIVE &bull; {match.minute}'</span>
-          </div>
-
-          <div className="w-full flex justify-between items-center px-0 md:px-8">
-            <div className="flex flex-col items-center gap-4 sm:gap-6 w-1/3">
-              <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-white drop-shadow-lg uppercase">{match.homeTeam}</h2>
-              <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.homeForm} /></div>
-            </div>
-
-            <div className="text-4xl sm:text-7xl lg:text-9xl font-black tracking-tighter w-1/3 text-center tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-zinc-600 drop-shadow-2xl">
-              {match.homeScore}<span className="text-zinc-700 mx-2 sm:mx-4">-</span>{match.awayScore}
-            </div>
-
-            <div className="flex flex-col items-center gap-4 sm:gap-6 w-1/3">
-              <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-zinc-400 drop-shadow-lg uppercase">{match.awayTeam}</h2>
-              <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.awayForm} /></div>
-            </div>
-          </div>
+      {/* Hero Section: Live or Scheduled Match */}
+      {match ? (
+        <GlassPanel className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 animate-fade-up opacity-0 stagger-1">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/5 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
           
-          <div className="flex sm:hidden w-full justify-between items-center px-1 mt-10">
-             <div className="scale-[0.8] origin-left"><FormGuide form={match.homeForm} /></div>
-             <div className="scale-[0.8] origin-right"><FormGuide form={match.awayForm} /></div>
+          <div className="relative z-10 flex flex-col items-center">
+            
+            {/* DYNAMIC STATUS BADGE */}
+            {match.status === 'live' ? (
+              <div className="flex items-center gap-4 mb-10 sm:mb-16 px-6 py-2.5 rounded-full bg-black/80 border border-white/20 backdrop-blur-xl shadow-[0_0_30px_rgba(255,255,255,0.05)]">
+                <div className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </div>
+                <span className="text-xs sm:text-sm font-black tracking-[0.3em] text-white">LIVE &bull; MATCH</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 mb-10 sm:mb-16 px-6 py-2.5 rounded-full bg-black/80 border border-white/10 backdrop-blur-xl">
+                <Calendar size={14} className="text-zinc-400" />
+                <span className="text-xs sm:text-sm font-black tracking-[0.2em] text-zinc-300 uppercase">
+                  UPCOMING &bull; {new Date(match.date).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+
+            <div className="w-full flex justify-between items-start px-0 md:px-8">
+              
+              {/* HOME TEAM */}
+              <div className="flex flex-col items-center gap-4 sm:gap-6 w-1/3 pt-4">
+                <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-white drop-shadow-lg uppercase">{match.homeTeam}</h2>
+                <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.homeForm} /></div>
+                
+                {/* HOME SCORERS LIST */}
+                {match.homeScorers?.length > 0 && (
+                  <ul className="flex flex-col items-center gap-1 mt-2 text-xs sm:text-sm font-bold text-zinc-400 uppercase tracking-widest">
+                    {match.homeScorers.map((scorer, i) => (
+                      <li key={i} className="flex items-center gap-1">
+                        <Goal size={10} className="text-zinc-500"/> {scorer.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* SCORE */}
+              <div className="text-4xl sm:text-7xl lg:text-9xl font-black tracking-tighter w-1/3 text-center tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white via-white to-zinc-600 drop-shadow-2xl pt-2">
+                {match.status === 'live' ? (
+                  <>{match.homeScore}<span className="text-zinc-700 mx-2 sm:mx-4">-</span>{match.awayScore}</>
+                ) : (
+                  <span className="text-5xl lg:text-7xl text-zinc-700">VS</span>
+                )}
+              </div>
+
+              {/* AWAY TEAM */}
+              <div className="flex flex-col items-center gap-4 sm:gap-6 w-1/3 pt-4">
+                <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-zinc-400 drop-shadow-lg uppercase">{match.awayTeam}</h2>
+                <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.awayForm} /></div>
+                
+                {/* AWAY SCORERS LIST */}
+                {match.awayScorers?.length > 0 && (
+                  <ul className="flex flex-col items-center gap-1 mt-2 text-xs sm:text-sm font-bold text-zinc-500 uppercase tracking-widest">
+                    {match.awayScorers.map((scorer, i) => (
+                      <li key={i} className="flex items-center gap-1">
+                        <Goal size={10} className="text-zinc-600"/> {scorer.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </GlassPanel>
+        </GlassPanel>
+      ) : (
+        <GlassPanel className="p-12 relative overflow-hidden border border-white/10 animate-fade-up flex justify-center items-center">
+           <span className="text-sm font-black tracking-[0.3em] uppercase text-zinc-500">No Fixtures Currently Scheduled</span>
+        </GlassPanel>
+      )}
 
       {/* Row 1: Standings/Bracket & News */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 relative z-20">
@@ -137,16 +175,10 @@ export function Home() {
                     {top4.map((team, idx) => (
                       <div key={team.teamId} className={`grid grid-cols-[3rem_minmax(120px,1fr)_3rem_3rem] gap-2 p-4 sm:p-5 items-center ${idx !== top4.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/10 transition-colors cursor-pointer`} onClick={() => setView('standings')}>
                         <div className="font-mono text-base sm:text-lg font-black text-center text-zinc-400">{team.rank}</div>
-                        
-                        {/* Map to teamName */}
                         <div className="font-black text-sm sm:text-lg truncate tracking-tight text-white uppercase">{team.teamName}</div>
-                        
-                        {/* Map to stats.goalDifference (Added optional chaining just to be safe!) */}
                         <div className="text-right text-zinc-500 font-mono font-bold text-sm sm:text-base">
                           {team.stats?.goalDifference > 0 ? `+${team.stats?.goalDifference}` : team.stats?.goalDifference}
                         </div>
-                        
-                        {/* Map to stats.points */}
                         <div className="text-right font-black text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-l from-white to-zinc-400 mr-2">
                           {team.stats?.points}
                         </div>
@@ -185,7 +217,6 @@ export function Home() {
             onAction={() => setView('leaderboard')}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
-            {/* Top Scorer Card */}
             {topScorer && (
               <GlassPanel className="p-6 relative overflow-hidden group min-w-0">
                 <Goal className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
@@ -201,7 +232,6 @@ export function Home() {
               </GlassPanel>
             )}
             
-            {/* Top Assist Card */}
             {topAssist && (
               <GlassPanel className="p-6 relative overflow-hidden group min-w-0">
                 <Zap className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />

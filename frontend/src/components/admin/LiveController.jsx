@@ -4,8 +4,12 @@ import { Activity, Trophy, Timer, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function LiveController() {
-  const { data: resp, refetch } = useApi('/admin/matches?status=live,scheduled');
-  const { data: playersResp } = useApi('/players'); 
+  // 1. ADD DIVISION STATE
+  const [division, setDivision] = useState('mens');
+
+  // 2. PASS DIVISION TO HOOK & FETCH ALL PLAYERS
+  const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
+  const { data: playersResp } = useApi('/players?all=true'); 
   
   const matches = resp?.data || [];
   const allPlayers = playersResp?.data || [];
@@ -74,14 +78,40 @@ export default function LiveController() {
     }));
   };
 
+  // Helper to safely switch divisions and clear selected matches
+  const handleDivisionSwitch = (newDiv) => {
+    setDivision(newDiv);
+    setSelectedMatch(null);
+    setShowGoalForm(false);
+  };
+
   return (
     <div className="p-6 space-y-8">
+      
+      {/* 3. ADD THE LEAGUE TOGGLE UI */}
+      <div className="flex justify-center mb-4">
+        <div className="bg-black/50 p-1 rounded-full border border-white/10 flex">
+          <button 
+            onClick={() => handleDivisionSwitch('mens')} 
+            className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+          >
+            Men's
+          </button>
+          <button 
+            onClick={() => handleDivisionSwitch('womens')} 
+            className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+          >
+            Women's
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {matches.map(m => (
+        {matches.length > 0 ? matches.map(m => (
           <button 
             key={m.id}
             onClick={() => { setSelectedMatch(m); setShowGoalForm(false); }}
-            className={`p-4 rounded-xl border transition-all ${selectedMatch?.id === m.id ? 'border-white bg-white/10' : 'border-white/10 bg-black/40'}`}
+            className={`p-4 rounded-xl border transition-all ${selectedMatch?.id === m.id ? 'border-white bg-white/10' : 'border-white/10 bg-black/40 hover:bg-white/5'}`}
           >
             <div className="flex justify-between text-xs uppercase font-black text-zinc-500 mb-2">
               <span>{m.division}</span>
@@ -89,7 +119,11 @@ export default function LiveController() {
             </div>
             <div className="font-bold text-lg">{m.home_team_name} vs {m.away_team_name}</div>
           </button>
-        ))}
+        )) : (
+          <div className="col-span-1 md:col-span-2 text-center py-12 border border-white/5 rounded-2xl bg-black/20">
+            <span className="text-zinc-500 font-bold uppercase tracking-widest text-sm">No active or scheduled matches found</span>
+          </div>
+        )}
       </div>
 
       {selectedMatch && (

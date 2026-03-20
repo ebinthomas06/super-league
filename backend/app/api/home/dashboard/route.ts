@@ -1,89 +1,121 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-export const revalidate = 0; // Turn off caching temporarily so you can test the toggle instantly!
+export const revalidate = 0; 
 
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ADDED request: Request to read the URL!
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const division = searchParams.get('division') || 'mens';
 
-    // 1. Fetch Top 4 Standings (Filtered)
-    const { data: standings, error: standingsErr } = await supabase
+    // 1. Fetch Top 4 Standings 
+    const { data: standings } = await supabase
       .from('league_standings')
       .select('*')
       .eq('division', division) 
       .order('rank', { ascending: true })
       .limit(4);
 
-    // If Supabase gets mad, it will print the exact reason in your backend terminal!
-    if (standingsErr) {
-      console.error("Supabase Standings Error:", standingsErr.message);
-    }
-    // 2. Fetch Latest 5 News Items
+    // 2. Fetch Latest News
     const { data: news } = await supabase
       .from('newsletter')
       .select('*')
       .order('date', { ascending: false })
       .limit(5);
 
-    // 3. Fetch Top Scorer & Top Assist (Filtered)
+    // 3. Fetch Top Scorer & Assist (Now reading from our new View!)
     const { data: scorers } = await supabase
       .from('top_scorers')
       .select('*')
-      .eq('division', division) // MAGIC LINE
+      .eq('division', division)
       .order('goalsScored', { ascending: false })
       .limit(1);
 
-    const assistsResp = await supabase
+    const { data: assists } = await supabase
       .from('top_scorers')
       .select('*')
-      .eq('division', division) // MAGIC LINE
+      .eq('division', division)
       .order('assists', { ascending: false })
       .limit(1);
-    
-    const assists = assistsResp.error ? scorers : assistsResp.data;
 
-    // 4. Fetch the most recent Live/Upcoming match from Schedule (Filtered)
-    const { data: schedule } = await supabase
-      .from('league_schedule')
-      .select('*')
-      .eq('division', division) // MAGIC LINE
-      .order('date', { ascending: true })
+    // 4. THE REAL MATCH LOGIC WITH GOALSCORERS
+    // First, try to find a LIVE match
+    let { data: liveMatches } = await supabase
+      .from('matches')
+      .select(`
+        id, home_score, away_score, status, date, home_team_id, away_team_id,
+        home:teams!home_team_id(name), 
+        away:teams!away_team_id(name),
+        goals ( player_id, team_id, players ( first_name, last_name ) )
+      `)
+      .eq('division', division)
+      .eq('status', 'live')
       .limit(1);
 
-    // Provide a mocked live match if the database schedule is empty
-    const liveMatch = schedule && schedule.length > 0 ? {
-      homeTeam: schedule[0].home_team || "Team A",
-      awayTeam: schedule[0].away_team || "Team B",
-      homeScore: schedule[0].status === 'completed' ? schedule[0].home_score : 0,
-      awayScore: schedule[0].status === 'completed' ? schedule[0].away_score : 0,
-      minute: schedule[0].status === 'live' ? "45+" : schedule[0].time || "18:00",
-      homeForm: ['W','D','L','W','W'],
-      awayForm: ['L','L','D','W','L']
-    } : {
-      homeTeam: division === 'womens' ? "KULASTHREE FC" : "BETA FC",
-      awayTeam: division === 'womens' ? "FAAAH UTD" : "CHARLIE UTD",
-      homeScore: 2,
-      awayScore: 1,
-      minute: "72",
-      homeForm: ['W','D','W','L','W'],
-      awayForm: ['L','L','D','W','L']
-    };
+    let targetMatch = liveMatches?.[0];
 
-    // 5. Mock Fantasy Leaderboard points
+    // If no live match, fetch the NEXT SCHEDULED match
+    if (!targetMatch) {
+      const { data: scheduledMatches } = await supabase
+        .from('matches')
+        .select(`
+          id, home_score, away_score, status, date, home_team_id, away_team_id,
+          home:teams!home_team_id(name), 
+          away:teams!away_team_id(name),
+          goals ( player_id, team_id, players ( first_name, last_name ) )
+        `)
+        .eq('division', division)
+        .eq('status', 'scheduled')
+        .gte('date', new Date().toISOString()) 
+        .order('date', { ascending: true })
+        .limit(1);
+
+      targetMatch = scheduledMatches?.[0];
+    }
+
+    let liveMatchData = null;
+    if (targetMatch) {
+      
+      const extractTeamName = (teamData: any) => {
+        if (!teamData) return 'TBD';
+        if (Array.isArray(teamData)) return teamData[0]?.name || 'TBD';
+        return teamData.name || 'TBD';
+      };
+
+      // Separate goals into Home and Away arrays
+      const homeGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.home_team_id).map((g: any) => ({
+        name: g.players?.last_name || g.players?.first_name || 'Unknown'
+      })) || [];
+
+      const awayGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.away_team_id).map((g: any) => ({
+        name: g.players?.last_name || g.players?.first_name || 'Unknown'
+      })) || [];
+
+      liveMatchData = {
+        homeTeam: extractTeamName(targetMatch.home),
+        awayTeam: extractTeamName(targetMatch.away),
+        homeScore: targetMatch.home_score || 0,
+        awayScore: targetMatch.away_score || 0,
+        status: targetMatch.status, 
+        date: targetMatch.date,     
+        minute: targetMatch.status === 'live' ? "LIVE" : "", 
+        homeForm: ['-','-','-','-','-'], 
+        awayForm: ['-','-','-','-','-'],
+        homeScorers: homeGoals, // <--- New data for the frontend!
+        awayScorers: awayGoals  // <--- New data for the frontend!
+      };
+    }
+
     const fantasyTop = [
       { id: 1, name: "Sreerag", points: 8520 },
       { id: 2, name: "Pranav", points: 8150 },
       { id: 3, name: "Alen", points: 7900 }
     ];
 
-    // Build the aggregated dashboard payload
     return NextResponse.json({
       success: true,
       data: {
@@ -91,16 +123,12 @@ export async function GET(request: Request) {
         news: news || [],
         topScorer: scorers?.[0] ? { name: scorers[0].name, club: scorers[0].club, stat: scorers[0].goalsScored } : null,
         topAssist: assists?.[0] ? { name: assists[0].name, club: assists[0].club, stat: assists[0].assists || 0 } : null,
-        liveMatch: liveMatch,
+        liveMatch: liveMatchData,
         fantasyTop: fantasyTop
       }
     });
 
   } catch (error) {
-    console.error("Dashboard fetch error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to aggregate dashboard data" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "Failed to aggregate dashboard data" }, { status: 500 });
   }
 }

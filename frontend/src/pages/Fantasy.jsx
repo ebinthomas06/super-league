@@ -3,9 +3,10 @@ import { useLeague } from '../context/LeagueContext';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { fetchApi } from '../hooks/useApi';
-import { Send, CheckCircle2, RefreshCw, Loader2, Crown } from 'lucide-react';
+import { Send, CheckCircle2, RefreshCw, Loader2, Crown, Lock } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { Login } from './Login';
+import { supabase } from '../lib/supabase';
 
 export function Fantasy() {
   const { division } = useLeague();
@@ -23,6 +24,10 @@ export function Fantasy() {
   const [homeRows, setHomeRows] = useState([]);
   const [awayRows, setAwayRows] = useState([]);
 
+  // --- Lockout State (NEW) ---
+  const [hasPredicted, setHasPredicted] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+
   // --- Submission state ---
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -37,6 +42,7 @@ export function Fantasy() {
     setAwayRows([]);
     setSubmitted(false);
     setSubmitError(null);
+    setHasPredicted(false);
   }, [division]);
 
   const upcomingMatches = useMemo(() =>
@@ -50,10 +56,34 @@ export function Fantasy() {
   [scheduleResp]);
 
   const allPlayers = playersResp?.data || [];
-
   const selectedMatch = upcomingMatches.find(m => m.id === selectedMatchId);
 
-  // Players for the selected match — only those from the two teams
+  // MAGIC FIX: Check if they already predicted when they select a match!
+  useEffect(() => {
+    const checkPredictionStatus = async () => {
+      if (!selectedMatchId) return;
+      setCheckingStatus(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const API_URL = import.meta.env.VITE_API_URL || '/api';
+        
+        const res = await fetch(`${API_URL}/predictions/${selectedMatchId}`, {
+          headers: { 'Authorization': `Bearer ${session?.access_token}` }
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          setHasPredicted(result.has_predicted);
+        }
+      } catch (err) {
+        console.error("Failed to check prediction status", err);
+      } finally {
+        setCheckingStatus(false);
+      }
+    };
+    checkPredictionStatus();
+  }, [selectedMatchId]);
+
   const matchPlayers = useMemo(() => {
     if (!selectedMatch) return allPlayers;
     return allPlayers.filter(p =>
@@ -62,7 +92,6 @@ export function Fantasy() {
     );
   }, [selectedMatch, allPlayers]);
 
-  // Sync goal rows when scores change
   useEffect(() => {
     const hs = parseInt(homeScore) || 0;
     setHomeRows(prev => {
@@ -86,6 +115,10 @@ export function Fantasy() {
     setter(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
+      
+      if (field === 'scorer' && next[index].assist === value) {
+        next[index].assist = '';
+      }
       return next;
     });
   };
@@ -106,10 +139,16 @@ export function Fantasy() {
       .filter(s => s && s !== 'Unassisted');
 
     try {
-      await fetchApi('/predictions', {
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      
+      const res = await fetch(`${API_URL}/predictions/${selectedMatchId}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
         body: JSON.stringify({
-          match_id: selectedMatchId,
           predicted_home_score: parseInt(homeScore) || 0,
           predicted_away_score: parseInt(awayScore) || 0,
           predicted_scorers,
@@ -117,10 +156,17 @@ export function Fantasy() {
         }),
       });
 
+      const result = await res.json();
+      
+      if (!res.ok || !result.success) {
+         throw new Error(result.message || 'Failed to submit prediction');
+      }
+
       setSubmitted(true);
-      refetchLb(); // Refresh leaderboard after submission
+      refetchLb(); 
     } catch (err) {
-      setSubmitError('Failed to submit prediction. Please try again.');
+      console.error("Submission Error:", err);
+      setSubmitError(err.message || 'Failed to submit prediction. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -134,9 +180,9 @@ export function Fantasy() {
     setHomeRows([]);
     setAwayRows([]);
     setSubmitError(null);
+    setHasPredicted(false);
   };
 
-  // Leaderboard data
   const leaderboard = lbResp?.data?.overall || [];
 
   if (scheduleLoading) {
@@ -221,95 +267,124 @@ export function Fantasy() {
             <div className="animate-in fade-in zoom-in-95 duration-300 space-y-10">
               <hr className="border-white/5" />
 
-              {/* Step 2: Score */}
-              <div>
-                <h3 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">2. Predict Score</h3>
-                <div className="flex items-center justify-center gap-4 sm:gap-8 bg-black/30 p-6 rounded-2xl border border-white/5">
-                  <div className="text-right flex-1">
-                    <p className="text-sm sm:text-xl font-black uppercase text-zinc-300 mb-4 truncate">{selectedMatch.homeTeam}</p>
-                    <input
-                      type="number" min="0" max="20"
-                      value={homeScore}
-                      onChange={(e) => setHomeScore(e.target.value)}
-                      className="w-16 sm:w-24 h-16 sm:h-24 text-4xl sm:text-5xl text-center font-black bg-black/70 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 transition-all text-white"
-                      placeholder="0" required
-                    />
-                  </div>
-                  <div className="text-lg sm:text-2xl font-black text-zinc-600 mt-10">VS</div>
-                  <div className="text-left flex-1">
-                    <p className="text-sm sm:text-xl font-black uppercase text-zinc-300 mb-4 truncate">{selectedMatch.awayTeam}</p>
-                    <input
-                      type="number" min="0" max="20"
-                      value={awayScore}
-                      onChange={(e) => setAwayScore(e.target.value)}
-                      className="w-16 sm:w-24 h-16 sm:h-24 text-4xl sm:text-5xl text-center font-black bg-black/70 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 transition-all text-white"
-                      placeholder="0" required
-                    />
-                  </div>
+              {/* CHECK IF ALREADY PREDICTED */}
+              {checkingStatus ? (
+                <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 animate-spin text-zinc-500" /></div>
+              ) : hasPredicted ? (
+                <div className="text-center py-12 bg-black/40 rounded-2xl border border-white/5 animate-in zoom-in-95 duration-500">
+                  <Lock className="w-12 h-12 text-zinc-500 mx-auto mb-4" />
+                  <h3 className="text-xl font-black uppercase tracking-widest text-white mb-2">Prediction Locked</h3>
+                  <p className="text-zinc-400 text-sm max-w-md mx-auto">
+                    You have already submitted your predictions for this match. Good luck! Points will be awarded after the final whistle.
+                  </p>
                 </div>
-              </div>
-
-              {/* Step 3: Goal events */}
-              {(homeRows.length > 0 || awayRows.length > 0) && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-300">
-                  <h3 className="text-xl font-bold uppercase tracking-widest text-white">3. Select Match Events</h3>
-
-                  {[
-                    { rows: homeRows, team: 'home', label: selectedMatch.homeTeam },
-                    { rows: awayRows, team: 'away', label: selectedMatch.awayTeam },
-                  ].map(({ rows, team, label }) => rows.length > 0 && (
-                    <div key={team} className="space-y-4">
-                      <h4 className="font-bold text-zinc-400 flex items-center gap-2 bg-white/5 p-3 rounded-xl">
-                        <span className={`w-2 h-2 rounded-full ${team === 'home' ? 'bg-white' : 'bg-zinc-500'}`}></span>
-                        {label} Goals ({rows.length})
-                      </h4>
-                      <div className="space-y-3">
-                        {rows.map((row, i) => (
-                          <div key={`${team}-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-4 rounded-xl border border-white/5">
-                            <select
-                              value={row.scorer}
-                              onChange={(e) => handleUpdateRow(team, i, 'scorer', e.target.value)}
-                              className="w-full h-12 bg-black/60 border border-white/10 rounded-lg px-4 text-sm font-bold text-white focus:outline-none focus:border-white/30 transition-colors"
-                              required
-                            >
-                              <option value="" disabled>Select Goalscorer...</option>
-                              {matchPlayers.map(p => (
-                                <option key={p.id} value={p.id} className="bg-zinc-900">{p.name}</option>
-                              ))}
-                            </select>
-                            <select
-                              value={row.assist}
-                              onChange={(e) => handleUpdateRow(team, i, 'assist', e.target.value)}
-                              className="w-full h-12 bg-black/60 border border-white/10 rounded-lg px-4 text-sm font-bold text-white focus:outline-none focus:border-white/30 transition-colors"
-                              required
-                            >
-                              <option value="" disabled>Select Assist...</option>
-                              <option value="Unassisted" className="bg-zinc-900 text-zinc-400">Unassisted</option>
-                              {matchPlayers.map(p => (
-                                <option key={`a-${p.id}`} value={p.id} className="bg-zinc-900">{p.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        ))}
+              ) : (
+                <>
+                  {/* Step 2: Score */}
+                  <div>
+                    <h3 className="text-xl font-bold uppercase tracking-widest mb-6 text-white">2. Predict Score</h3>
+                    <div className="flex items-center justify-center gap-4 sm:gap-8 bg-black/30 p-6 rounded-2xl border border-white/5">
+                      <div className="text-right flex-1">
+                        <p className="text-sm sm:text-xl font-black uppercase text-zinc-300 mb-4 truncate">{selectedMatch.homeTeam}</p>
+                        <input
+                          type="number" min="0" max="20"
+                          value={homeScore}
+                          onChange={(e) => setHomeScore(e.target.value)}
+                          className="w-16 sm:w-24 h-16 sm:h-24 text-4xl sm:text-5xl text-center font-black bg-black/70 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 transition-all text-white"
+                          placeholder="0" required
+                        />
+                      </div>
+                      <div className="text-lg sm:text-2xl font-black text-zinc-600 mt-10">VS</div>
+                      <div className="text-left flex-1">
+                        <p className="text-sm sm:text-xl font-black uppercase text-zinc-300 mb-4 truncate">{selectedMatch.awayTeam}</p>
+                        <input
+                          type="number" min="0" max="20"
+                          value={awayScore}
+                          onChange={(e) => setAwayScore(e.target.value)}
+                          className="w-16 sm:w-24 h-16 sm:h-24 text-4xl sm:text-5xl text-center font-black bg-black/70 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 transition-all text-white"
+                          placeholder="0" required
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
 
-              {submitError && (
-                <p className="text-red-400 font-bold text-sm text-center">{submitError}</p>
-              )}
+                  {/* Step 3: Goal events */}
+                  {(homeRows.length > 0 || awayRows.length > 0) && (
+                    <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <h3 className="text-xl font-bold uppercase tracking-widest text-white">3. Select Match Events</h3>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full group h-16 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold text-lg uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
-              >
-                {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                  <><span>Lock In Prediction</span><Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>
-                )}
-              </button>
+                      {[
+                        { rows: homeRows, team: 'home', label: selectedMatch.homeTeam, teamId: selectedMatch.home_team_id },
+                        { rows: awayRows, team: 'away', label: selectedMatch.awayTeam, teamId: selectedMatch.away_team_id },
+                      ].map(({ rows, team, label, teamId }) => {
+                        
+                        const teamPlayers = matchPlayers.filter(p => (p.team_id || p.teams?.id) === teamId);
+
+                        return rows.length > 0 && (
+                          <div key={team} className="space-y-4">
+                            <h4 className="font-bold text-zinc-400 flex items-center gap-2 bg-white/5 p-3 rounded-xl">
+                              <span className={`w-2 h-2 rounded-full ${team === 'home' ? 'bg-white' : 'bg-zinc-500'}`}></span>
+                              {label} Goals ({rows.length})
+                            </h4>
+                            <div className="space-y-3">
+                              {rows.map((row, i) => {
+                                const assistOptions = teamPlayers.filter(p => p.id !== row.scorer);
+
+                                return (
+                                  <div key={`${team}-${i}`} className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-4 rounded-xl border border-white/5">
+                                    <select
+                                      value={row.scorer}
+                                      onChange={(e) => handleUpdateRow(team, i, 'scorer', e.target.value)}
+                                      className="w-full h-12 bg-black/60 border border-white/10 rounded-lg px-4 text-sm font-bold text-white focus:outline-none focus:border-white/30 transition-colors"
+                                      required
+                                    >
+                                      <option value="" disabled>Select Goalscorer...</option>
+                                      {teamPlayers.map(p => (
+                                        <option key={p.id} value={p.id} className="bg-zinc-900">
+                                          {p.name || `${p.first_name} ${p.last_name}`}
+                                        </option>
+                                      ))}
+                                    </select>
+
+                                    <select
+                                      value={row.assist}
+                                      onChange={(e) => handleUpdateRow(team, i, 'assist', e.target.value)}
+                                      className="w-full h-12 bg-black/60 border border-white/10 rounded-lg px-4 text-sm font-bold text-white focus:outline-none focus:border-white/30 transition-colors"
+                                      required
+                                    >
+                                      <option value="" disabled>Select Assist...</option>
+                                      <option value="Unassisted" className="bg-zinc-900 text-zinc-400">Unassisted</option>
+                                      {assistOptions.map(p => (
+                                        <option key={`a-${p.id}`} value={p.id} className="bg-zinc-900">
+                                          {p.name || `${p.first_name} ${p.last_name}`}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {submitError && (
+                    <p className="text-red-400 font-bold text-sm text-center">{submitError}</p>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full group h-16 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold text-lg uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50"
+                  >
+                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                      <><span>Lock In Prediction</span><Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </form>

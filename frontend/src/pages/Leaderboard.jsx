@@ -6,17 +6,17 @@ import { Loader2 } from 'lucide-react';
 
 export function Leaderboard() {
   const { division } = useLeague();
-  const { data: apiResponse, loading } = useApi('/leaderboard');
   
-  const players = apiResponse?.data || [];
+  // Pass the division to the backend so it knows which stats to grab!
+  const { data: apiResponse, loading } = useApi(`/leaderboard?division=${division}`);
+  
+  // Extract the separated lists directly from the new backend response
+  const scorersData = apiResponse?.data?.topScorers || [];
+  const assistsData = apiResponse?.data?.topAssists || [];
 
-  const topScorers = [...players]
-    .sort((a, b) => b.goalsScored - a.goalsScored)
-    .map(p => ({ ...p, stat: p.goalsScored }));
-
-  const topAssists = [...players]
-    .sort((a, b) => (b.assists || 0) - (a.assists || 0))
-    .map(p => ({ ...p, stat: p.assists || 0 }));
+  // Map them so the UI component can read the 'stat' variable easily
+  const topScorers = scorersData.map(p => ({ ...p, stat: p.goalsScored || 0 }));
+  const topAssists = assistsData.map(p => ({ ...p, stat: p.assists || 0 }));
 
   if (loading) {
     return (
@@ -40,7 +40,7 @@ export function Leaderboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-        {/* Top Scorers */}
+        {/* Top Scorers Section */}
         <GlassPanel className="p-6 sm:p-10 flex flex-col h-full">
           <div className="flex items-center gap-4 mb-8">
             <div>
@@ -56,9 +56,9 @@ export function Leaderboard() {
               <div className="text-right">GLS</div>
             </div>
             
-            {topScorers.map((player, index) => (
+            {topScorers.length > 0 ? topScorers.map((player, index) => (
               <div 
-                key={player.id} 
+                key={`scorer-${player.id || index}`} 
                 className={cn(
                   "grid grid-cols-[3rem_1fr_4rem] gap-4 items-center p-4 rounded-2xl transition-all duration-300",
                   index === 0 ? "bg-white/5 border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "bg-black/40 hover:bg-white/5 border border-white/5"
@@ -83,11 +83,13 @@ export function Leaderboard() {
                   </span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest text-sm">No goals recorded yet</div>
+            )}
           </div>
         </GlassPanel>
 
-        {/* Top Assists */}
+        {/* Top Assists Section */}
         <GlassPanel className="p-6 sm:p-10 flex flex-col h-full">
           <div className="flex items-center gap-4 mb-8">
             <div>
@@ -103,9 +105,9 @@ export function Leaderboard() {
               <div className="text-right">AST</div>
             </div>
             
-            {topAssists.map((player, index) => (
+            {topAssists.length > 0 ? topAssists.map((player, index) => (
               <div 
-                key={player.id} 
+                key={`assist-${player.id || index}`} 
                 className={cn(
                   "grid grid-cols-[3rem_1fr_4rem] gap-4 items-center p-4 rounded-2xl transition-all duration-300",
                   index === 0 ? "bg-white/5 border border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.05)]" : "bg-black/40 hover:bg-white/5 border border-white/5"
@@ -130,7 +132,9 @@ export function Leaderboard() {
                   </span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-10 text-zinc-600 font-bold uppercase tracking-widest text-sm">No assists recorded yet</div>
+            )}
           </div>
         </GlassPanel>
       </div>
