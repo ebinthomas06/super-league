@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { Shield, Trash2, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function ManageTeams() {
   const { data: teamsResp, refetch: refetchTeams } = useApi('/teams?all=true'); 
@@ -37,7 +38,7 @@ export default function ManageTeams() {
       }
 
       // 2. SEND TO BACKEND
-      const res = await fetch('/api/admin/teams', {
+      const res = await fetch(`${API_URL}/admin/teams`, {
         method: 'POST',
         credentials: 'include',
         headers: { 
