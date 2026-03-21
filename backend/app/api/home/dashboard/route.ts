@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const revalidate = 0; 
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.SUPABASE_URL as string;
+const supabaseKey = process.env.SUPABASE_ANON_KEY as string;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(request: Request) {
@@ -12,22 +12,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const division = searchParams.get('division') || 'mens';
 
-    // 1. Fetch Top 4 Standings 
-    const { data: standings } = await supabase
-      .from('league_standings')
-      .select('*')
-      .eq('division', division) 
-      .order('rank', { ascending: true })
-      .limit(4);
-
-    // 2. Fetch Latest News
+    // 1. Fetch Latest News
     const { data: news } = await supabase
       .from('newsletter')
       .select('*')
       .order('date', { ascending: false })
       .limit(5);
 
-    // 3. Fetch Top Scorer & Assist (Now reading from our new View!)
+    // 2. Fetch Top Scorer & Assist
     const { data: scorers } = await supabase
       .from('top_scorers')
       .select('*')
@@ -42,59 +34,102 @@ export async function GET(request: Request) {
       .order('assists', { ascending: false })
       .limit(1);
 
-    // 4. THE REAL MATCH LOGIC WITH GOALSCORERS
-    // First, try to find a LIVE match
-    let { data: liveMatches } = await supabase
+    // --- 3. FETCH ALL TEAMS AND ALL MATCHES TO CALCULATE REAL FORM & STANDINGS ---
+    const { data: teams } = await supabase
+      .from('teams')
+      .select('id, name')
+      .eq('division', division);
+
+    const { data: allMatches } = await supabase
       .from('matches')
-      .select(`
-        id, home_score, away_score, status, date, home_team_id, away_team_id,
-        home:teams!home_team_id(name), 
-        away:teams!away_team_id(name),
-        goals ( player_id, team_id, players ( first_name, last_name ) )
-      `)
+      .select('id, home_team_id, away_team_id, home_score, away_score, status, date, minute, home:teams!home_team_id(name), away:teams!away_team_id(name), goals ( player_id, team_id, minute, is_own_goal, player:players!goals_player_id_fkey ( first_name, last_name ) )')
       .eq('division', division)
-      .eq('status', 'live')
-      .limit(1);
+      .order('date', { ascending: true }); // MUST BE ASCENDING FOR CORRECT FORM
 
-    let targetMatch = liveMatches?.[0];
+    // Initialize the scoreboard map
+    const scoreboard: Record<string, any> = {};
+    teams?.forEach(team => {
+      scoreboard[team.id] = {
+        teamId: team.id,
+        teamName: team.name,
+        stats: { points: 0, goalDifference: 0, goalsFor: 0 },
+        form: [] // We will store 'W', 'D', 'L' here
+      };
+    });
 
-    // If no live match, fetch the NEXT SCHEDULED match
-    if (!targetMatch) {
-      const { data: scheduledMatches } = await supabase
-        .from('matches')
-        .select(`
-          id, home_score, away_score, status, date, home_team_id, away_team_id,
-          home:teams!home_team_id(name), 
-          away:teams!away_team_id(name),
-          goals ( player_id, team_id, players ( first_name, last_name ) )
-        `)
-        .eq('division', division)
-        .eq('status', 'scheduled')
-        .gte('date', new Date().toISOString()) 
-        .order('date', { ascending: true })
-        .limit(1);
+    // FIX: Intelligently pick the Hero Match!
+    // Priority 1: Find ANY Live Match. Priority 2: Fallback to the next Scheduled Match.
+    const liveMatch = allMatches?.find((m: any) => m.status === 'live');
+    const nextScheduled = allMatches?.find((m: any) => m.status === 'scheduled');
+    let targetMatch: any = liveMatch || nextScheduled || null;
 
-      targetMatch = scheduledMatches?.[0];
-    }
+    let liveMatchData: any = null;
 
-    let liveMatchData = null;
+    // 4. PROCESS MATCHES (Calculate Form, Standings)
+    allMatches?.forEach((match: any) => {
+      // Calculate Stats & Form for COMPLETED matches
+      if (match.status === 'completed') {
+        const home = scoreboard[match.home_team_id];
+        const away = scoreboard[match.away_team_id];
+
+        if (!home || !away) return;
+
+        const homeScore = match.home_score || 0;
+        const awayScore = match.away_score || 0;
+
+        home.stats.goalsFor += homeScore;
+        away.stats.goalsFor += awayScore;
+
+        if (homeScore > awayScore) {
+          home.stats.points += 3; home.form.push('W');
+          away.form.push('L');
+        } else if (awayScore > homeScore) {
+          away.stats.points += 3; away.form.push('W');
+          home.form.push('L');
+        } else {
+          home.stats.points += 1; home.form.push('D');
+          away.stats.points += 1; away.form.push('D');
+        }
+
+        home.stats.goalDifference += (homeScore - awayScore);
+        away.stats.goalDifference += (awayScore - homeScore);
+      }
+    });
+
+    // Sort Standings (Top 4)
+    const standingsArray = Object.values(scoreboard).sort((a, b) => {
+      if (b.stats.points !== a.stats.points) return b.stats.points - a.stats.points;
+      if (b.stats.goalDifference !== a.stats.goalDifference) return b.stats.goalDifference - a.stats.goalDifference;
+      return b.stats.goalsFor - a.stats.goalsFor;
+    });
+
+    standingsArray.forEach((team, index) => { team.rank = index + 1; });
+    const top4 = standingsArray.slice(0, 4);
+
+    // 5. BUILD LIVE MATCH DATA
     if (targetMatch) {
-      
       const extractTeamName = (teamData: any) => {
         if (!teamData) return 'TBD';
         if (Array.isArray(teamData)) return teamData[0]?.name || 'TBD';
         return teamData.name || 'TBD';
       };
 
-      // Separate goals into Home and Away arrays
       const homeGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.home_team_id).map((g: any) => ({
-        name: g.players?.last_name || g.players?.first_name || 'Unknown'
+        name: g.player?.last_name || g.player?.first_name || 'Unknown',
+        minute: g.minute,
+        isOwnGoal: g.is_own_goal
       })) || [];
 
       const awayGoals = targetMatch.goals?.filter((g: any) => g.team_id === targetMatch.away_team_id).map((g: any) => ({
-        name: g.players?.last_name || g.players?.first_name || 'Unknown'
+        name: g.player?.last_name || g.player?.first_name || 'Unknown',
+        minute: g.minute,
+        isOwnGoal: g.is_own_goal
       })) || [];
 
+      // Grab the exact form history we just calculated!
+      const homeStanding = scoreboard[targetMatch.home_team_id];
+      const awayStanding = scoreboard[targetMatch.away_team_id];
+      
       liveMatchData = {
         homeTeam: extractTeamName(targetMatch.home),
         awayTeam: extractTeamName(targetMatch.away),
@@ -102,11 +137,11 @@ export async function GET(request: Request) {
         awayScore: targetMatch.away_score || 0,
         status: targetMatch.status, 
         date: targetMatch.date,     
-        minute: targetMatch.status === 'live' ? "LIVE" : "", 
-        homeForm: ['-','-','-','-','-'], 
-        awayForm: ['-','-','-','-','-'],
-        homeScorers: homeGoals, // <--- New data for the frontend!
-        awayScorers: awayGoals  // <--- New data for the frontend!
+        minute: targetMatch.minute || "1'", 
+        homeForm: homeStanding?.form || [], 
+        awayForm: awayStanding?.form || [],
+        homeScorers: homeGoals,
+        awayScorers: awayGoals 
       };
     }
 
@@ -119,7 +154,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        standings: standings || [],
+        standings: top4, 
         news: news || [],
         topScorer: scorers?.[0] ? { name: scorers[0].name, club: scorers[0].club, stat: scorers[0].goalsScored } : null,
         topAssist: assists?.[0] ? { name: assists[0].name, club: assists[0].club, stat: assists[0].assists || 0 } : null,
@@ -129,6 +164,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error) {
+    console.error("Dashboard Aggregation Error:", error);
     return NextResponse.json({ success: false, message: "Failed to aggregate dashboard data" }, { status: 500 });
   }
 }

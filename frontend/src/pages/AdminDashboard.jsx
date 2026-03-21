@@ -1,7 +1,7 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Swords } from 'lucide-react';
+import { Users, Shield, Calendar, Newspaper, Activity, LogOut, Menu, X } from 'lucide-react';
 import { GlassPanel } from '../components/GlassPanel';
 import LiveController from '../components/admin/LiveController';
 import ManagePlayers from '../components/admin/ManagePlayers';
@@ -14,6 +14,8 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('live');
   const [isAdmin, setIsAdmin] = useState(false);
   const [checkingRole, setCheckingRole] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // NEW: Mobile menu state
+
   useEffect(() => {
     async function checkAdminStatus() {
       if (!user) {
@@ -22,7 +24,7 @@ export function AdminDashboard() {
       }
 
       // Check the user_roles table!
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
@@ -48,7 +50,6 @@ export function AdminDashboard() {
     </div>
   );
 
-
   const tabs = [
     { id: 'live', label: 'Live Matches', icon: Activity, color: 'text-red-500' },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
@@ -58,13 +59,50 @@ export function AdminDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white flex pt-20">
+    // FIX: Change to flex-col on mobile, flex-row on desktop
+    <div className="min-h-screen bg-black text-white flex flex-col md:flex-row pt-20">
       
-      {/* SIDEBAR */}
-      <div className="w-64 border-r border-white/10 bg-black/50 p-6 flex flex-col">
-        <h1 className="text-xl font-black uppercase tracking-widest mb-10 text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
+      {/* --- MOBILE TOP BAR --- */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-white/10 bg-black/80 backdrop-blur-md z-30">
+        <h1 className="text-lg font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">
           Admin Command
         </h1>
+        <button 
+          onClick={() => setIsMobileMenuOpen(true)} 
+          className="p-2 text-zinc-400 hover:text-white transition-colors"
+        >
+          <Menu size={24} />
+        </button>
+      </div>
+
+      {/* --- MOBILE OVERLAY --- */}
+      {/* Clicks outside the sidebar on mobile will close the menu */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* --- SIDEBAR --- */}
+      <div className={`
+        fixed md:static inset-y-0 left-0 z-50 w-64 border-r border-white/10 bg-zinc-950 md:bg-black/50 p-6 flex flex-col transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
+        <div className="flex items-center justify-between mb-10">
+          <h1 className="text-xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500 hidden md:block">
+            Admin Command
+          </h1>
+          <h1 className="text-lg font-black uppercase tracking-widest text-zinc-400 md:hidden">
+            Menu
+          </h1>
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)} 
+            className="md:hidden p-2 text-zinc-400 hover:text-white rounded-lg transition-colors"
+          >
+            <X size={24} />
+          </button>
+        </div>
         
         <nav className="flex-1 space-y-2">
           {tabs.map((tab) => {
@@ -73,7 +111,10 @@ export function AdminDashboard() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setIsMobileMenuOpen(false); // Auto-close menu on mobile when a tab is clicked
+                }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold uppercase tracking-wider text-sm transition-all duration-300 ${
                   isActive 
                     ? 'bg-white text-black' 
@@ -95,8 +136,9 @@ export function AdminDashboard() {
         </button>
       </div>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 p-8 overflow-y-auto">
+      {/* --- MAIN CONTENT AREA --- */}
+      {/* FIX: Reduced padding on mobile (`p-4 md:p-8`), ensured it takes full width */}
+      <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-full">
         <GlassPanel className="min-h-full border border-white/10 bg-black/60">
           {activeTab === 'live' && <LiveController />}
           {activeTab === 'schedule' && <ScheduleMatches />}

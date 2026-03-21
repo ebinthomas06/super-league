@@ -1,13 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { Activity, Trophy, Timer, CheckCircle, X } from 'lucide-react';
+import { Activity, Trophy, CheckCircle, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function LiveController() {
-  // 1. ADD DIVISION STATE
   const [division, setDivision] = useState('mens');
-
-  // 2. PASS DIVISION TO HOOK & FETCH ALL PLAYERS
   const { data: resp, refetch } = useApi(`/admin/matches?status=live,scheduled&division=${division}`);
   const { data: playersResp } = useApi('/players?all=true'); 
   
@@ -17,44 +14,102 @@ export default function LiveController() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [loading, setLoading] = useState(false);
   
+  // --- MATCH CLOCK STATE ---
+  const [liveMinute, setLiveMinute] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [displayTime, setDisplayTime] = useState('');
+
+  // --- GOALS STATE ---
+  const [goalsList, setGoalsList] = useState([]);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [goalForm, setGoalForm] = useState({ 
-    team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false 
+    id: null, team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false 
   });
+
+  // 1. Fetch Goals Function
+  const fetchMatchGoals = async () => {
+    if (!selectedMatch) return;
+    const { data, error } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('match_id', selectedMatch.id)
+      .order('id', { ascending: true });
+    
+    if (error) console.error("Error fetching goals:", error);
+    if (!error && data) setGoalsList(data);
+  };
+
+  // 2. Initialize clock & Smart Resume when a match is clicked
+  useEffect(() => {
+    if (selectedMatch) {
+      const dbMinute = selectedMatch.minute || "0'";
+      setDisplayTime(dbMinute);
+      const parsed = parseInt(dbMinute);
+      setLiveMinute(isNaN(parsed) ? 0 : parsed);
+      
+      // Smart Timer Resume Logic
+      if (selectedMatch.status === 'live' && dbMinute !== 'HT' && dbMinute !== 'FT') {
+        setTimerRunning(true);
+      } else {
+        setTimerRunning(false); 
+      }
+      
+      fetchMatchGoals(); 
+    }
+  }, [selectedMatch]);
+
+  // 3. The Auto-Ticker! (Fires every 60 seconds)
+  useEffect(() => {
+    let interval;
+    if (timerRunning) {
+      interval = setInterval(() => {
+        setLiveMinute(prev => {
+          const next = prev + 1;
+          syncTimeToDb(`${next}'`); 
+          return next;
+        });
+      }, 60000); 
+    }
+    return () => clearInterval(interval);
+  }, [timerRunning, selectedMatch]);
+
+  // 4. Silent Sync Function
+  const syncTimeToDb = async (timeStr) => {
+    if (!selectedMatch) return;
+    setDisplayTime(timeStr);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      await fetch(`${API_URL}/admin/matches/live`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ match_id: selectedMatch.id, action: 'update_time', minute: timeStr })
+      });
+    } catch (err) { console.error(err); }
+  };
 
   const handleAction = async (action, extraData = {}) => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-
-      const res = await fetch('/api/admin/matches/live', {
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      const res = await fetch(`${API_URL}/admin/matches/live`, {
         method: 'POST',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}` 
-        },
-        body: JSON.stringify({
-          match_id: selectedMatch.id,
-          action,
-          ...extraData
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ match_id: selectedMatch.id, action, ...extraData })
       });
       
       const result = await res.json();
       if (result.success) {
         alert(result.message);
         refetch(); 
+        fetchMatchGoals(); 
         setShowGoalForm(false); 
       } else {
         alert("Error: " + result.message);
       }
-    } catch (err) {
-      alert("Action failed. Check console.");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert("Action failed. Check console."); } 
+    finally { setLoading(false); }
   };
 
   const submitGoal = (e) => {
@@ -62,47 +117,37 @@ export default function LiveController() {
     handleAction('add_goal', goalForm);
   };
 
-  // Bulletproof filter
-  const teamPlayers = allPlayers.filter(p => {
-    const playerTeamId = p.team_id || p.teams?.id;
-    return playerTeamId === goalForm.team_id;
-  });
-
-  // Handle Own Goal Toggle
-  const toggleOwnGoal = (e) => {
-    const isOwn = e.target.checked;
-    setGoalForm(prev => ({
-      ...prev,
-      is_own_goal: isOwn,
-      assist_id: isOwn ? '' : prev.assist_id // Instantly clear assist if own goal
-    }));
+  const handleDeleteGoal = (goalId) => {
+    if(confirm("Are you sure you want to delete this goal? This will adjust the score.")) {
+      handleAction('delete_goal', { goal_id: goalId });
+    }
   };
 
-  // Helper to safely switch divisions and clear selected matches
+  const teamPlayers = allPlayers.filter(p => (p.team_id || p.teams?.id) === goalForm.team_id);
+
+  const toggleOwnGoal = (e) => {
+    const isOwn = e.target.checked;
+    setGoalForm(prev => ({ ...prev, is_own_goal: isOwn, assist_id: isOwn ? '' : prev.assist_id }));
+  };
+
   const handleDivisionSwitch = (newDiv) => {
     setDivision(newDiv);
     setSelectedMatch(null);
     setShowGoalForm(false);
   };
 
+  const getPlayerName = (id) => {
+    const player = allPlayers.find(p => p.id === id);
+    return player ? `${player.first_name} ${player.last_name}` : 'Unknown Player';
+  };
+
   return (
     <div className="p-6 space-y-8">
       
-      {/* 3. ADD THE LEAGUE TOGGLE UI */}
       <div className="flex justify-center mb-4">
         <div className="bg-black/50 p-1 rounded-full border border-white/10 flex">
-          <button 
-            onClick={() => handleDivisionSwitch('mens')} 
-            className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
-          >
-            Men's
-          </button>
-          <button 
-            onClick={() => handleDivisionSwitch('womens')} 
-            className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
-          >
-            Women's
-          </button>
+          <button onClick={() => handleDivisionSwitch('mens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'mens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Men's</button>
+          <button onClick={() => handleDivisionSwitch('womens')} className={`px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${division === 'womens' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Women's</button>
         </div>
       </div>
 
@@ -142,15 +187,42 @@ export default function LiveController() {
             </div>
           </div>
 
+          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mb-8 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4">
+              <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400">Match Clock</h4>
+              <div className="flex items-center gap-3">
+                <span className={`text-4xl font-black tabular-nums ${timerRunning ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {displayTime || `${liveMinute}'`}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {!timerRunning ? (
+                <button type="button" onClick={() => { setTimerRunning(true); syncTimeToDb(`${liveMinute}'`); }} className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                  ▶ Start
+                </button>
+              ) : (
+                <button type="button" onClick={() => { setTimerRunning(false); syncTimeToDb(`${liveMinute}'`); }} className="bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30 font-bold py-3 rounded-xl flex justify-center items-center gap-2 uppercase text-xs tracking-widest transition-colors">
+                  ⏸ Pause
+                </button>
+              )}
+              <button type="button" onClick={() => { setTimerRunning(false); syncTimeToDb('HT'); }} className={`font-bold py-3 rounded-xl uppercase text-xs tracking-widest transition-colors border ${displayTime === 'HT' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/30' : 'bg-white/10 text-white border-transparent hover:bg-white/20'}`}>
+                Half Time
+              </button>
+              <div className="flex border border-white/10 rounded-xl overflow-hidden bg-black/60">
+                <input type="number" value={liveMinute} onChange={e => setLiveMinute(parseInt(e.target.value) || 0)} className="w-full bg-transparent text-white text-center font-bold outline-none" />
+                <button type="button" onClick={() => syncTimeToDb(`${liveMinute}'`)} className="bg-white/20 px-4 hover:bg-white/30 text-xs font-bold uppercase tracking-widest transition-colors">Set</button>
+              </div>
+            </div>
+          </div>
+
           {showGoalForm ? (
             <form onSubmit={submitGoal} className="bg-black/50 border border-white/10 rounded-xl p-6 mb-6 space-y-4">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-black uppercase tracking-widest text-sm">Register Goal</h4>
                 <button type="button" onClick={() => setShowGoalForm(false)} className="text-zinc-500 hover:text-white"><X size={18}/></button>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* SELECT TEAM */}
                 <div>
                   <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
                     {goalForm.is_own_goal ? "Select Offending Team (Own Goal)" : "Select Scoring Team"}
@@ -161,14 +233,10 @@ export default function LiveController() {
                     <option value={selectedMatch.away_team_id} className="bg-zinc-900 text-white">{selectedMatch.away_team_name} (Away)</option>
                   </select>
                 </div>
-
-                {/* MINUTE */}
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Minute</label>
-                  <input type="number" required placeholder="e.g. 45" value={goalForm.minute} onChange={e => setGoalForm({...goalForm, minute: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white" />
+                  <input type="text" required placeholder="e.g. 45" value={goalForm.minute} onChange={e => setGoalForm({...goalForm, minute: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white" />
                 </div>
-
-                {/* GOALSCORER */}
                 <div>
                   <label className={`block text-[10px] font-bold uppercase tracking-widest mb-2 ${goalForm.is_own_goal ? 'text-red-400' : 'text-zinc-500'}`}>
                     {goalForm.is_own_goal ? "Player Who Scored Own Goal" : "Goalscorer"}
@@ -178,8 +246,6 @@ export default function LiveController() {
                     {teamPlayers.map(p => <option key={p.id} value={p.id} className="bg-zinc-900 text-white">{p.first_name} {p.last_name}</option>)}
                   </select>
                 </div>
-
-                {/* ASSIST (DISABLED IF OWN GOAL) */}
                 <div>
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Assist (Optional)</label>
                   <select disabled={!goalForm.team_id || goalForm.is_own_goal} value={goalForm.assist_id} onChange={e => setGoalForm({...goalForm, assist_id: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 outline-none text-sm text-white disabled:opacity-50">
@@ -188,29 +254,57 @@ export default function LiveController() {
                   </select>
                 </div>
               </div>
-
               <div className="flex items-center gap-3 py-2">
                 <input type="checkbox" id="own_goal" checked={goalForm.is_own_goal} onChange={toggleOwnGoal} className="w-4 h-4 accent-red-500" />
                 <label htmlFor="own_goal" className="text-xs font-bold uppercase tracking-widest text-red-400">Mark as Own Goal</label>
               </div>
-
               <button type="submit" disabled={loading} className="w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-lg hover:bg-zinc-200 transition-colors mt-2">
-                {loading ? "Registering..." : "Confirm Goal"}
+                {loading ? "Saving..." : "Confirm Goal"}
               </button>
             </form>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button onClick={() => setShowGoalForm(true)} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase hover:bg-zinc-200 transition-colors">
+              <button onClick={() => { setGoalForm({ id: null, team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false }); setShowGoalForm(true); }} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors">
                 <Trophy size={18} /> Add Goal
               </button>
-              <button disabled={loading} onClick={() => handleAction('update_time')} className="flex items-center justify-center gap-3 bg-zinc-800 text-white py-4 rounded-xl font-black uppercase hover:bg-zinc-700 transition-colors">
-                <Timer size={18} /> Kick Off / Live
-              </button>
-              <button disabled={loading} onClick={() => { if(confirm("End match and lock scores?")) handleAction('close_match'); }} className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase hover:bg-red-600/30 transition-colors sm:col-span-2">
+              <button disabled={loading} onClick={() => { if(confirm("End match and lock scores?")) { setTimerRunning(false); handleAction('close_match'); } }} className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors">
                 <CheckCircle size={18} /> Final Whistle
               </button>
             </div>
           )}
+
+          <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mt-8 space-y-4 shadow-xl">
+             <h4 className="font-black uppercase tracking-widest text-sm text-zinc-400 mb-2">Match Goals ({goalsList.length})</h4>
+             <div className="space-y-3">
+               {goalsList.length > 0 ? goalsList.map(goal => (
+                 <div key={goal.id} className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
+                   <div>
+                     <div className="text-sm font-bold text-white flex items-center gap-2">
+                       <span className="text-zinc-500 w-8">{goal.minute}'</span> 
+                       {getPlayerName(goal.player_id)} 
+                       {goal.is_own_goal && <span className="text-[10px] bg-red-500/20 text-red-500 px-2 py-0.5 rounded-sm uppercase tracking-widest">Own Goal</span>}
+                     </div>
+                     {goal.assist_id && (
+                       <div className="text-[11px] text-zinc-500 mt-1 ml-10">
+                         Assist: {getPlayerName(goal.assist_id)}
+                       </div>
+                     )}
+                   </div>
+                   <div className="flex items-center gap-3 ml-4">
+                     {/* The Edit button has been completely removed from here */}
+                     <button onClick={() => handleDeleteGoal(goal.id)} className="text-zinc-600 hover:text-red-500 transition-colors" title="Delete">
+                       <Trash2 size={16} />
+                     </button>
+                   </div>
+                 </div>
+               )) : (
+                 <div className="text-center py-6 text-zinc-600 text-xs font-bold uppercase tracking-widest border border-dashed border-white/10 rounded-xl">
+                   No goals registered yet.
+                 </div>
+               )}
+             </div>
+          </div>
+
         </div>
       )}
     </div>

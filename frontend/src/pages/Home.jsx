@@ -64,13 +64,20 @@ export function Home() {
           <div className="relative z-10 flex flex-col items-center">
             
             {/* DYNAMIC STATUS BADGE */}
-            {match.status === 'live' ? (
+            {match.status === 'live' || match.status === 'completed' ? (
               <div className="flex items-center gap-4 mb-10 sm:mb-16 px-6 py-2.5 rounded-full bg-black/80 border border-white/20 backdrop-blur-xl shadow-[0_0_30px_rgba(255,255,255,0.05)]">
-                <div className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                </div>
-                <span className="text-xs sm:text-sm font-black tracking-[0.3em] text-white">LIVE &bull; MATCH</span>
+                {match.status === 'live' && (
+                  <div className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </div>
+                )}
+                <span className={`text-xs sm:text-sm font-black tracking-[0.3em] ${match.status === 'live' ? 'text-white' : 'text-zinc-400'}`}>
+                  {match.minute === 'HT' ? 'HALF TIME' 
+                   : match.minute === 'FT' ? 'FULL TIME'
+                   : match.status === 'live' ? `LIVE • ${match.minute && match.minute !== "LIVE" ? match.minute : "1'"}`
+                   : 'FULL TIME'}
+                </span>
               </div>
             ) : (
               <div className="flex items-center gap-4 mb-10 sm:mb-16 px-6 py-2.5 rounded-full bg-black/80 border border-white/10 backdrop-blur-xl">
@@ -88,12 +95,15 @@ export function Home() {
                 <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-white drop-shadow-lg uppercase">{match.homeTeam}</h2>
                 <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.homeForm} /></div>
                 
-                {/* HOME SCORERS LIST */}
+                {/* HOME SCORERS LIST (Now with Minutes!) */}
                 {match.homeScorers?.length > 0 && (
-                  <ul className="flex flex-col items-center gap-1 mt-2 text-xs sm:text-sm font-bold text-zinc-400 uppercase tracking-widest">
+                  <ul className="flex flex-col items-center gap-1.5 mt-2 text-xs sm:text-sm font-bold text-zinc-400 uppercase tracking-widest">
                     {match.homeScorers.map((scorer, i) => (
-                      <li key={i} className="flex items-center gap-1">
-                        <Goal size={10} className="text-zinc-500"/> {scorer.name}
+                      <li key={i} className="flex items-center gap-1.5">
+                        <Goal size={10} className="text-zinc-500"/> 
+                        <span>{scorer.name}</span>
+                        {scorer.minute && <span className="text-[10px] text-zinc-600">{scorer.minute}'</span>}
+                        {scorer.isOwnGoal && <span className="text-[9px] bg-red-500/20 text-red-500 px-1 rounded-sm">OG</span>}
                       </li>
                     ))}
                   </ul>
@@ -114,12 +124,15 @@ export function Home() {
                 <h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-center tracking-tighter leading-none text-zinc-400 drop-shadow-lg uppercase">{match.awayTeam}</h2>
                 <div className="hidden sm:block opacity-80 scale-110 origin-top"><FormGuide form={match.awayForm} /></div>
                 
-                {/* AWAY SCORERS LIST */}
+                {/* AWAY SCORERS LIST (Now with Minutes!) */}
                 {match.awayScorers?.length > 0 && (
-                  <ul className="flex flex-col items-center gap-1 mt-2 text-xs sm:text-sm font-bold text-zinc-500 uppercase tracking-widest">
+                  <ul className="flex flex-col items-center gap-1.5 mt-2 text-xs sm:text-sm font-bold text-zinc-500 uppercase tracking-widest">
                     {match.awayScorers.map((scorer, i) => (
-                      <li key={i} className="flex items-center gap-1">
-                        <Goal size={10} className="text-zinc-600"/> {scorer.name}
+                      <li key={i} className="flex items-center gap-1.5">
+                        <Goal size={10} className="text-zinc-600"/> 
+                        <span>{scorer.name}</span>
+                        {scorer.minute && <span className="text-[10px] text-zinc-600">{scorer.minute}'</span>}
+                        {scorer.isOwnGoal && <span className="text-[9px] bg-red-500/20 text-red-500 px-1 rounded-sm">OG</span>}
                       </li>
                     ))}
                   </ul>
@@ -159,7 +172,7 @@ export function Home() {
                     </div>
                  </div>
                  <div className="mt-8 text-xs font-bold text-zinc-400 uppercase flex items-center gap-2 tracking-widest group-hover:text-white transition-colors">
-                   View Tournament Tree <ChevronRight size={14} />
+                    View Tournament Tree <ChevronRight size={14} />
                  </div>
               </div>
             ) : (

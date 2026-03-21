@@ -3,21 +3,27 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../../lib/errorHandler'; // Adjust path if needed
 
-// 1. THE MAGIC FIX: Teach the client to read the Auth Header!
+// FIX 1: Add ': Request' to the parameter
 async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
-  const authHeader = request.headers.get('Authorization'); // Grab the VIP Pass from the frontend!
+  const authHeader = request.headers.get('Authorization'); 
 
-  return createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
-    cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
-    global: {
-      headers: {
-        Authorization: authHeader || '', // Force Supabase to use the token!
+  return createServerClient(
+    // FIX 2: Explicitly cast env variables as strings
+    process.env.SUPABASE_URL as string, 
+    process.env.SUPABASE_ANON_KEY as string, 
+    {
+      cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
+      global: {
+        headers: {
+          Authorization: authHeader || '', 
+        },
       },
-    },
-  });
+    }
+  );
 }
 
+// FIX 1: Add ': Request' to the parameter
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -27,19 +33,15 @@ export async function POST(request: Request) {
       throw { status: 400, message: "match_id and action are required." };
     }
 
-    // 2. PASS THE REQUEST IN HERE
     const supabase = await getSupabaseClient(request); 
 
     // Security check
-    // 1. Get the User
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    // 2. KICK OUT NOBODIES FIRST!
     if (authError || !user) {
       throw { status: 401, message: "Unauthorized: Please log in." };
     }
 
-    // 3. NOW check if they are an Admin
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
@@ -47,12 +49,11 @@ export async function POST(request: Request) {
       .eq('role', 'admin')
       .single();
 
-    // 4. Kick out logged-in students who aren't admins
     if (!roleData) {
       throw { status: 403, message: "Forbidden: Admin clearance required." };
     }
 
-    // 1. Fetch the current state of the match
+    // Fetch the current state of the match
     const { data: match, error: matchErr } = await supabase
       .from('matches')
       .select('*')
@@ -61,10 +62,11 @@ export async function POST(request: Request) {
 
     if (matchErr || !match) throw { status: 404, message: "Match not found." };
 
-    let updatePayload: any = { updated_at: new Date().toISOString() };
+    // FIX 3: Tell TypeScript this object can hold any properties we add later
+    let updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
     let responseMessage = "Match updated.";
 
-    // 2. THE ACTION SWITCHBOARD
+    // THE ACTION SWITCHBOARD
     switch (action) {
       case 'add_goal':
         if (!player_id || !team_id) throw { status: 400, message: "player_id and team_id required for a goal." };
@@ -72,30 +74,24 @@ export async function POST(request: Request) {
         const isHomePlayer = match.home_team_id === team_id;
         
         if (body.is_own_goal) {
-          // 1. Give point to the OPPOSITE team
           updatePayload.home_score = !isHomePlayer ? (match.home_score || 0) + 1 : match.home_score;
           updatePayload.away_score = isHomePlayer ? (match.away_score || 0) + 1 : match.away_score;
           
-          // 2. Add to an 'own_goals' array INSTEAD of 'scorers' so they don't get Golden Boot points!
           const currentOwnGoals = match.own_goals || [];
           updatePayload.own_goals = [...currentOwnGoals, player_id];
           
           responseMessage = "Own Goal registered! Point awarded to the opposition.";
         } else {
-          // Normal Goal: Give point to the PLAYER'S team
           updatePayload.home_score = isHomePlayer ? (match.home_score || 0) + 1 : match.home_score;
           updatePayload.away_score = !isHomePlayer ? (match.away_score || 0) + 1 : match.away_score;
           
-          // Add to regular scorers array
           const currentScorers = match.scorers || [];
           updatePayload.scorers = [...currentScorers, player_id];
 
-          // MAGIC FIX: Log the assist AND update the player's permanent stats!
           if (body.assist_id) {
             const currentAssists = match.assists || [];
             updatePayload.assists = [...currentAssists, body.assist_id];
 
-            // Grab the assisting player's current tally and add 1
             const { data: assistPlayer } = await supabase.from('players').select('assists').eq('id', body.assist_id).single();
             await supabase.from('players').update({ assists: (assistPlayer?.assists || 0) + 1 }).eq('id', body.assist_id);
           }
@@ -103,8 +99,14 @@ export async function POST(request: Request) {
         }
         updatePayload.status = 'live';
         
-        // (Optional) If you have an is_own_goal column in your goals table, you can pass it here later!
-        await supabase.from('goals').insert([{ match_id, player_id, team_id }]);
+        await supabase.from('goals').insert([{ 
+          match_id: match_id, 
+          player_id: player_id, 
+          team_id: team_id,
+          minute: body.minute || null,
+          assist_id: body.assist_id || null,
+          is_own_goal: body.is_own_goal || false
+        }]);
         break;
         
       case 'add_assist':
@@ -115,22 +117,86 @@ export async function POST(request: Request) {
         break;
 
       case 'update_time':
-        // Just sets the status to live so the frontend shows the red blinking dot
         updatePayload.status = 'live';
-        responseMessage = "Match is now LIVE!";
+        if (body.minute) {
+          updatePayload.minute = body.minute;
+          responseMessage = `Match clock synced to ${body.minute}`;
+        } else {
+          responseMessage = "Match is now LIVE!";
+        }
+        break;
+
+      case 'half_time':
+        updatePayload.status = 'live'; 
+        updatePayload.minute = 'HT';
+        responseMessage = "Match paused for Half Time!";
         break;
 
       case 'close_match':
-        // Blow the final whistle
         updatePayload.status = 'completed';
+        updatePayload.minute = 'FT';
         responseMessage = "Match officially closed! Ready for grading.";
         break;
+      
+      case 'delete_goal':
+        if (!body.goal_id) throw { status: 400, message: "goal_id is required to delete." };
+
+        const { data: goalToDelete, error: goalFetchErr } = await supabase
+          .from('goals')
+          .select('*')
+          .eq('id', body.goal_id)
+          .single();
+
+        if (goalFetchErr || !goalToDelete) throw { status: 404, message: "Goal not found." };
+
+        const isHomeTeam = match.home_team_id === goalToDelete.team_id;
+
+        if (goalToDelete.is_own_goal) {
+          updatePayload.home_score = !isHomeTeam ? Math.max(0, (match.home_score || 0) - 1) : match.home_score;
+          updatePayload.away_score = isHomeTeam ? Math.max(0, (match.away_score || 0) - 1) : match.away_score;
+          
+          const ogIndex = (match.own_goals || []).indexOf(goalToDelete.player_id);
+          if (ogIndex > -1) {
+             const newOg = [...match.own_goals];
+             newOg.splice(ogIndex, 1);
+             updatePayload.own_goals = newOg;
+          }
+        } else {
+          updatePayload.home_score = isHomeTeam ? Math.max(0, (match.home_score || 0) - 1) : match.home_score;
+          updatePayload.away_score = !isHomeTeam ? Math.max(0, (match.away_score || 0) - 1) : match.away_score;
+          
+          const scorerIndex = (match.scorers || []).indexOf(goalToDelete.player_id);
+          if (scorerIndex > -1) {
+             const newScorers = [...match.scorers];
+             newScorers.splice(scorerIndex, 1);
+             updatePayload.scorers = newScorers;
+          }
+
+          if (goalToDelete.assist_id) {
+             const assistIndex = (match.assists || []).indexOf(goalToDelete.assist_id);
+             if (assistIndex > -1) {
+                const newAssists = [...match.assists];
+                newAssists.splice(assistIndex, 1);
+                updatePayload.assists = newAssists;
+             }
+             const { data: aPlayer } = await supabase.from('players').select('assists').eq('id', goalToDelete.assist_id).single();
+             if (aPlayer) {
+                await supabase.from('players').update({ assists: Math.max(0, (aPlayer.assists || 0) - 1) }).eq('id', goalToDelete.assist_id);
+             }
+          }
+        }
+
+        await supabase.from('goals').delete().eq('id', body.goal_id);
+        responseMessage = "Goal deleted and score adjusted.";
+        break;
+
+      case 'edit_goal':
+        throw { status: 501, message: "Edit is handled via deleting and re-adding currently. (For backend safety)" };
 
       default:
         throw { status: 400, message: "Unknown action type." };
     }
 
-    // 3. Execute the final Match update
     const { data: updatedMatch, error: updateErr } = await supabase
       .from('matches')
       .update(updatePayload)

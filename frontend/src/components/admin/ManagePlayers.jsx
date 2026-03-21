@@ -4,7 +4,8 @@ import { UserPlus, Trash2, Copy, Check, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const initialFormState = { 
-  first_name: '', last_name: '', team_id: '', position: '', alt_positions: '', jersey_number: '', overall_rating: 50, play_styles: '',
+  first_name: '', last_name: '', team_id: '', position: '', alt_positions: '', jersey_number: '', overall_rating: 50, 
+  play_style_name: '', play_style_desc: '',
   bio: { height: '', weight: '', preferredFoot: 'Right', weakFoot: 3, skillMoves: 3 },
   stats: { 
     pace: { total: 50, acceleration: 50, sprintSpeed: 50 },
@@ -27,6 +28,7 @@ export default function ManagePlayers() {
   const [copiedId, setCopiedId] = useState(null);
   const [activeFormTab, setActiveFormTab] = useState('basic');
   const [imageFile, setImageFile] = useState(null);
+  const [playStyleImageFile, setPlayStyleImageFile] = useState(null); // NEW: Image state for PlayStyle
   const [form, setForm] = useState(initialFormState);
 
   const handleCopy = (id) => {
@@ -51,7 +53,9 @@ export default function ManagePlayers() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       let finalImageUrl = null;
+      let finalPlayStyleUrl = null;
 
+      // Upload main player image
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
@@ -61,8 +65,26 @@ export default function ManagePlayers() {
         finalImageUrl = publicUrl;
       }
 
-      // Convert comma-separated string to arrays
-      const playStylesArray = form.play_styles.split(',').map(s => s.trim()).filter(Boolean).map(name => ({ name, description: '' }));
+      // NEW: Upload PlayStyle Icon
+      if (playStyleImageFile) {
+        const fileExt = playStyleImageFile.name.split('.').pop();
+        const fileName = `ps_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+        const { error: psUploadError } = await supabase.storage.from('player-images').upload(fileName, playStyleImageFile);
+        if (psUploadError) throw psUploadError;
+        const { data: { publicUrl } } = supabase.storage.from('player-images').getPublicUrl(fileName);
+        finalPlayStyleUrl = publicUrl;
+      }
+
+      // Convert PlayStyle Data into array
+      const playStylesArray = [];
+      if (form.play_style_name) {
+        playStylesArray.push({
+          name: form.play_style_name.trim(),
+          description: form.play_style_desc.trim(),
+          icon_url: finalPlayStyleUrl
+        });
+      }
+
       const altPositionsArray = form.alt_positions.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
 
       const payload = {
@@ -98,6 +120,7 @@ export default function ManagePlayers() {
         alert("Player added to Database!");
         refetchPlayers();
         setImageFile(null);
+        setPlayStyleImageFile(null); // Reset PS image
         setForm(initialFormState);
         setActiveFormTab('basic');
       } else {
@@ -125,7 +148,6 @@ export default function ManagePlayers() {
     }
   };
 
-  // Helper arrays to map out the complex Attributes UI cleanly
   const statGroups = [
     { id: 'pace', title: 'Pace', subs: [{ id: 'acceleration', label: 'Acceleration' }, { id: 'sprintSpeed', label: 'Sprint Speed' }] },
     { id: 'shooting', title: 'Shooting', subs: [{ id: 'finishing', label: 'Finishing' }, { id: 'shotPower', label: 'Shot Power' }, { id: 'positioning', label: 'Positioning' }] },
@@ -145,7 +167,7 @@ export default function ManagePlayers() {
           </h3>
           <div className="flex bg-black rounded-lg border border-white/10 overflow-hidden">
             <button type="button" onClick={() => setActiveFormTab('basic')} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${activeFormTab === 'basic' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Basic</button>
-            <button type="button" onClick={() => setActiveFormTab('bio')} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${activeFormTab === 'bio' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Bio</button>
+            <button type="button" onClick={() => setActiveFormTab('bio')} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${activeFormTab === 'bio' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Bio & PlayStyles</button>
             <button type="button" onClick={() => setActiveFormTab('stats')} className={`px-4 py-2 text-xs font-bold uppercase tracking-widest ${activeFormTab === 'stats' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}>Attributes</button>
           </div>
         </div>
@@ -174,7 +196,8 @@ export default function ManagePlayers() {
 
           {/* TAB 2: BIO & PLAYSTYLES */}
           {activeFormTab === 'bio' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-left-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-left-4">
+              {/* LEFT: Bio */}
               <div className="space-y-4">
                 <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500 border-b border-white/10 pb-2">Physical Bio</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -203,17 +226,29 @@ export default function ManagePlayers() {
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-xs font-black uppercase tracking-widest text-zinc-500 border-b border-white/10 pb-2">Extra Details</h4>
-                <div>
+                <div className="mt-4">
                   <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Alt Positions (Comma Separated)</label>
                   <input type="text" placeholder="e.g. LW, CF" value={form.alt_positions} onChange={e => setForm({...form, alt_positions: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
                 </div>
+              </div>
+
+              {/* RIGHT: Signature PlayStyle (NEW UI) */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-[#E8C881] border-b border-[#E8C881]/20 pb-2">Signature PlayStyle (Optional)</h4>
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">PlayStyles (Comma Separated)</label>
-                  <input type="text" placeholder="e.g. Rapid, Finesse Shot" value={form.play_styles} onChange={e => setForm({...form, play_styles: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">PlayStyle Name</label>
+                  <input type="text" placeholder="e.g. Finesse Shot+" value={form.play_style_name} onChange={e => setForm({...form, play_style_name: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Description</label>
+                  <textarea placeholder="e.g. Faster finesse shots with max curve and accuracy" value={form.play_style_desc} onChange={e => setForm({...form, play_style_desc: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 h-20 resize-none" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">PlayStyle Icon Image</label>
+                  <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-3">
+                    <UploadCloud size={20} className="text-zinc-500" />
+                    <input type="file" accept="image/*" onChange={e => setPlayStyleImageFile(e.target.files[0])} className="w-full text-sm text-zinc-400 file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-[#E8C881]/10 file:text-[#E8C881] hover:file:bg-[#E8C881]/20 cursor-pointer" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -249,7 +284,7 @@ export default function ManagePlayers() {
         </form>
       </div>
 
-      {/* PLAYER ROSTER TABLE - Kept exact same for brevity */}
+      {/* PLAYER ROSTER TABLE */}
       <div className="bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
         <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_2fr_1fr] gap-4 p-4 border-b border-white/10 text-[10px] font-black tracking-widest text-zinc-500 uppercase bg-black/60">
           <div>Name</div><div>Team</div><div>OVR / Pos</div><div>No.</div><div>UUID</div><div className="text-right">Actions</div>

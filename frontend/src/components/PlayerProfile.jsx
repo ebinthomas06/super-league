@@ -11,7 +11,20 @@ const getStatColor = (val) => {
   return 'bg-[#ff1744]';
 };
 
-// Simplified fallback data
+const getCardBackground = (rating) => {
+  const num = parseInt(rating) || 50;
+  if (num >= 85) return "url('/gold.png')";
+  if (num >= 70) return "url('/silver.png')";
+  return "url('/bronze.png')";
+};
+
+const getCardTextColor = (rating) => {
+  const num = parseInt(rating) || 50;
+  if (num >= 85) return "text-amber-950";
+  if (num >= 70) return "text-zinc-900";
+  return "text-orange-950";
+};
+
 const defaultAttributes = {
   bio: { preferredFoot: "Right" },
   stats: {
@@ -33,7 +46,10 @@ export default function PlayerProfile() {
 
   useEffect(() => {
     const raw = sessionStorage.getItem('selectedPlayer');
-    if (!raw) { setView('teams'); return; }
+    if (!raw) {
+      setView('teams');
+      return;
+    }
 
     const base = JSON.parse(raw);
 
@@ -49,14 +65,16 @@ export default function PlayerProfile() {
 
   const handleBack = () => {
     sessionStorage.removeItem('selectedPlayer');
-    setView('teams'); 
+    setView('teams');
   };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 animate-pulse space-y-4">
         <Loader2 className="w-12 h-12 animate-spin text-white/20" />
-        <span className="font-black tracking-[0.3em] uppercase text-sm">Loading Player...</span>
+        <span className="font-black tracking-[0.3em] uppercase text-sm">
+          Loading Player...
+        </span>
       </div>
     );
   }
@@ -65,8 +83,13 @@ export default function PlayerProfile() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 space-y-4">
         <Shield className="w-12 h-12 text-zinc-700" />
-        <span className="font-black tracking-[0.3em] uppercase text-sm">{error || 'Player not found'}</span>
-        <button onClick={handleBack} className="text-xs text-zinc-400 hover:text-white uppercase tracking-widest font-bold transition-colors">
+        <span className="font-black tracking-[0.3em] uppercase text-sm">
+          {error || 'Player not found'}
+        </span>
+        <button
+          onClick={handleBack}
+          className="text-xs text-zinc-400 hover:text-white uppercase tracking-widest font-bold transition-colors"
+        >
           Back to Teams
         </button>
       </div>
@@ -78,114 +101,190 @@ export default function PlayerProfile() {
   const bio = attrs.bio || defaultAttributes.bio;
   const styles = attrs.playStyles || [];
 
+  const cardBgImage = getCardBackground(player.overall_rating);
+  const cardTextColor = getCardTextColor(player.overall_rating);
+
   return (
     <div className="w-full bg-[#0F0E13] min-h-screen text-white p-4 md:p-8 font-sans pb-20 animate-in fade-in duration-300">
-      
-      <button onClick={handleBack} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 group">
-        <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+      <button
+        onClick={handleBack}
+        className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-6 group"
+      >
+        <ArrowLeft
+          size={20}
+          className="group-hover:-translate-x-1 transition-transform"
+        />
         Back to Squad
       </button>
 
       <div className="flex flex-col xl:flex-row gap-8 max-w-7xl mx-auto">
-        
-        {/* LEFT COLUMN: The Gold Card & Bio */}
-        <div className="flex flex-col lg:flex-row xl:flex-col gap-6 w-full xl:w-1/3">
-          
-          <div className="flex gap-6 items-start">
-            {/* The Gold Card */}
-            <div className="w-48 h-64 rounded-xl bg-gradient-to-br from-[#E8C881] via-[#C9A050] to-[#966E2D] p-1 shadow-2xl relative overflow-hidden shrink-0 flex flex-col items-center">
-              
-              {/* Rating & Position */}
-              <div className="absolute top-3 left-3 flex flex-col items-center text-[#2A1E04]">
-                <span className="text-3xl font-black leading-none">{player.overall_rating || 50}</span>
-                <span className="text-sm font-bold">{player.position || 'RES'}</span>
+
+        {/* LEFT COLUMN */}
+        <div className="flex flex-col lg:flex-row xl:flex-col gap-6 w-full xl:w-1/3 shrink-0">
+
+          <div className="flex flex-col items-center sm:items-start sm:flex-row xl:flex-col xl:items-center gap-6">
+
+            {/* CARD */}
+            <div
+              className="relative w-[260px] h-[380px] shrink-0 bg-center bg-no-repeat select-none flex flex-col drop-shadow-2xl overflow-hidden"
+              style={{
+                backgroundImage: cardBgImage,
+                backgroundSize: '100% 100%'
+              }}
+            >
+
+              {/* RATING */}
+              <div className={`absolute top-[22%] left-[16%] flex flex-col items-start z-10 ${cardTextColor}`}>
+                <span className="text-4xl font-black leading-none tabular-nums">
+                  {player.overall_rating || 50}
+                </span>
+                <span className="text-sm font-bold uppercase tracking-wider">
+                  {player.position || 'RES'}
+                </span>
               </div>
-              
-              {/* Centered & Shrunk Player Image */}
-              <div className="absolute inset-0 flex items-center justify-center pt-4">
+
+              {/* IMAGE */}
+              <div className="absolute top-[29%] left-0 w-full flex justify-center">
                 {player.image_url ? (
-                   <img src={player.image_url} alt={player.name} className="w-28 h-28 object-contain drop-shadow-xl" />
+                  <img
+                    src={player.image_url}
+                    alt={player.name}
+                    className="h-[130px] object-contain drop-shadow-2xl"
+                  />
                 ) : (
-                   <Shield className="w-20 h-20 text-[#2A1E04]/30" />
+                  <Shield className={`h-[130px] w-auto opacity-40 ${cardTextColor}`} />
                 )}
               </div>
-             
-              {/* Bottom Base Stats */}
-              <div className="absolute bottom-2 w-full flex justify-center gap-2 text-[#2A1E04] font-bold text-[10px] uppercase">
-                <div className="flex flex-col items-center"><span>PAC</span><span>{stats.Pace?.total || 0}</span></div>
-                <div className="flex flex-col items-center"><span>SHO</span><span>{stats.Shooting?.total || 0}</span></div>
-                <div className="flex flex-col items-center"><span>PAS</span><span>{stats.Passing?.total || 0}</span></div>
-                <div className="flex flex-col items-center"><span>DRI</span><span>{stats.Dribbling?.total || 0}</span></div>
-                <div className="flex flex-col items-center"><span>DEF</span><span>{stats.Defending?.total || 0}</span></div>
-                <div className="flex flex-col items-center"><span>PHY</span><span>{stats.Physicality?.total || 0}</span></div>
+
+              {/* NAME */}
+              <div className={`absolute bottom-[28%] left-0 w-full text-center ${cardTextColor}`}>
+                <div className="font-black text-[14px] uppercase tracking-widest">
+                  {player.last_name || player.first_name}
+                </div>
               </div>
+
+              {/* STATS */}
+              <div className={`absolute bottom-[19%] left-0 w-full px-6 ${cardTextColor}`}>
+                <div className="grid grid-cols-6 text-center">
+                  {[
+                    { label: 'PAC', value: stats.Pace?.total },
+                    { label: 'SHO', value: stats.Shooting?.total },
+                    { label: 'PAS', value: stats.Passing?.total },
+                    { label: 'DRI', value: stats.Dribbling?.total },
+                    { label: 'DEF', value: stats.Defending?.total },
+                    { label: 'PHY', value: stats.Physicality?.total },
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex flex-col">
+                      <span className="text-[9px] font-bold opacity-80">
+                        {stat.label}
+                      </span>
+                      <span className="text-[15px] font-black leading-none">
+                        {stat.value || 0}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
 
-            {/* Name Details */}
-            <div className="flex flex-col mt-4">
-              <span className="text-3xl font-bold text-gray-300 leading-tight">{player.first_name}</span>
-              <span className="text-5xl font-black leading-none">{player.last_name}</span>
+            {/* BIG NAME */}
+            <div className="flex flex-col xl:items-center mt-2 sm:mt-8 items-center sm:items-start text-center sm:text-left xl:text-center xl:w-full">
+              <span className="text-2xl sm:text-3xl font-bold text-gray-300 leading-tight">
+                {player.first_name}
+              </span>
+              <span className="text-4xl sm:text-5xl xl:text-6xl font-black leading-none">
+                {player.last_name}
+              </span>
             </div>
+
           </div>
 
-          {/* Bio Data Panel (Stripped down to just 2 fields) */}
-          <div className="bg-[#1A1820] rounded-2xl p-6 grid grid-cols-2 gap-y-6 border border-white/5">
+          {/* BIO */}
+          <div className="bg-[#1A1820] rounded-2xl p-6 grid grid-cols-2 gap-y-6 border border-white/5 w-full">
             <div>
               <p className="text-xs text-gray-400 mb-1">Position</p>
-              <span className="bg-white/10 px-2 py-1 rounded text-sm font-bold">{player.position || '—'}</span>
+              <span className="bg-white/10 px-2 py-1 rounded text-sm font-bold">
+                {player.position || '—'}
+              </span>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Preferred Foot</p>
               <p className="font-bold">{bio.preferredFoot || 'Right'}</p>
             </div>
           </div>
+
         </div>
 
-        {/* RIGHT COLUMN: The Main 6 Attributes & Playstyles */}
+        {/* RIGHT */}
         <div className="flex-1 flex flex-col gap-6">
+
           <div className="bg-[#1A1820] rounded-2xl p-6 border border-white/5">
-            <h3 className="text-xl font-black uppercase tracking-widest mb-6 border-b border-white/10 pb-4">Core Attributes</h3>
-            
+            <h3 className="text-xl font-black uppercase tracking-widest mb-6 border-b border-white/10 pb-4">
+              Core Attributes
+            </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-              {['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality'].map(category => {
-                // Handle missing stats safely
-                const val = stats[category]?.total || 0;
-                
-                return (
-                  <div key={category} className="flex flex-col gap-2 text-sm">
-                    <div className="flex justify-between text-gray-300 font-bold uppercase tracking-wider">
-                      <span>{category}</span>
-                      <span className="text-white text-lg">{val}</span>
+              {['Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physicality']
+                .map(category => {
+                  const val = stats[category]?.total || 0;
+
+                  return (
+                    <div key={category} className="flex flex-col gap-2 text-sm">
+                      <div className="flex justify-between text-gray-300 font-bold uppercase tracking-wider">
+                        <span>{category}</span>
+                        <span className="text-white text-lg tabular-nums">{val}</span>
+                      </div>
+
+                      <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${getStatColor(val)}`}
+                          style={{ width: `${val}%` }}
+                        />
+                      </div>
                     </div>
-                    {/* Progress Line */}
-                    <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div className={`h-full ${getStatColor(val)}`} style={{ width: `${val}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
 
-          {/* PlayStyles Section */}
+          {/* PLAYSTYLE */}
           {styles.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4">
               {styles.map(style => (
-                <div key={style.name} className="bg-[#1A1820] rounded-xl p-5 border border-white/5 flex flex-col gap-2 hover:bg-white/5 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <Hexagon size={20} className="text-[#E8C881]" />
-                    <span className="font-bold uppercase tracking-widest text-[#E8C881]">{style.name}</span>
+                <div
+                  key={style.name}
+                  className="bg-[#1C1C24] rounded-2xl p-5 border border-white/5 flex gap-5 items-center shadow-lg"
+                >
+                  {style.icon_url ? (
+                    <img
+                      src={style.icon_url}
+                      alt={style.name}
+                      className="w-14 h-14 object-contain drop-shadow-md"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 shrink-0 flex items-center justify-center bg-black/50 rounded-xl border border-white/10">
+                      <Hexagon size={26} className="text-[#E8C881]" />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col">
+                    <span className="font-black text-xl text-white tracking-wide">
+                      {style.name}
+                    </span>
+
+                    <p className="text-sm text-zinc-400 leading-relaxed mt-1">
+                      {style.description ||
+                        `Grants unique mechanics and precision on the pitch.`}
+                    </p>
                   </div>
-                  {/* description fallback just in case your database schema used a different key */}
-                  <p className="text-sm text-gray-400 leading-relaxed mt-1">
-                    {style.description || style.desc || `Grants the player unique capabilities and precision regarding ${style.name.toLowerCase()} mechanics on the pitch.`}
-                  </p>
+
                 </div>
               ))}
             </div>
           )}
-        </div>
 
+        </div>
       </div>
     </div>
   );
