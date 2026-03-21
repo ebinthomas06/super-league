@@ -4,21 +4,21 @@ import { useLeague } from '../context/LeagueContext';
 export function NewsArticle({ article }) {
   const { setView, setSelectedArticle } = useLeague();
 
-  // Support both DB field names (title/summary/image_url) and legacy aliases
+  // Support both DB field names (title/image_url) and legacy aliases
   const headline = article.headline || article.title;
-  const snippet = article.snippet || article.summary;
   const imgUrl = article.imgUrl || article.image_url;
 
   return (
     <GlassPanel 
-      className="overflow-hidden group cursor-pointer transition-all duration-300 hover:border-white/30 active:scale-[0.98]"
+      className="overflow-hidden group cursor-pointer transition-all duration-300 hover:border-white/30 active:scale-[0.98] flex flex-col h-full"
       onClick={() => {
         setSelectedArticle(article);
         setView('article');
       }}
     >
+      {/* Image Section */}
       {imgUrl && (
-        <div className="relative h-48 sm:h-56 overflow-hidden">
+        <div className="relative h-48 sm:h-56 overflow-hidden shrink-0">
           <img 
             src={imgUrl}
             alt={headline}
@@ -26,14 +26,12 @@ export function NewsArticle({ article }) {
           />
         </div>
       )}
-      <div className="p-5">
-        <p className="text-xs text-zinc-500 font-mono mb-2">{article.date}</p>
-        <h4 className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight group-hover:text-zinc-200 transition-colors">
+      
+      {/* Headline Only Section */}
+      <div className="p-5 sm:p-6 flex-1 flex flex-col justify-center">
+        <h4 className="text-lg sm:text-xl font-black text-white leading-tight group-hover:text-zinc-200 transition-colors uppercase tracking-tight line-clamp-3">
           {headline}
         </h4>
-        <p className="text-sm text-zinc-400 line-clamp-2">
-          {snippet}
-        </p>
       </div>
     </GlassPanel>
   );

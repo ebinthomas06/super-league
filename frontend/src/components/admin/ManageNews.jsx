@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApi } from '../../hooks/useApi';
 import { Newspaper, Trash2, Plus, Image as ImageIcon, Type, Quote, UploadCloud } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 
 export default function ManageNews() {
   const { data: newsResp, refetch: refetchNews } = useApi('/news'); 
@@ -59,7 +61,7 @@ export default function ManageNews() {
       }));
 
       // 3. Send to API
-      const res = await fetch('/api/admin/newsletter', {
+      const res = await fetch(`${API_URL}/admin/newsletter`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
@@ -70,7 +72,7 @@ export default function ManageNews() {
           content: processedBlocks 
         })
       });
-      
+
       if (res.ok) {
         alert("Article Published!");
         refetchNews();
@@ -93,8 +95,10 @@ export default function ManageNews() {
     if (!confirm("Delete this article forever?")) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      await fetch(`/api/admin/newsletter?id=${id}`, { 
-        method: 'DELETE', credentials: 'include', headers: { 'Authorization': `Bearer ${session?.access_token}` }
+      await fetch(`${API_URL}/admin/newsletter?id=${id}`, { 
+        method: 'DELETE', 
+        credentials: 'include', 
+        headers: { 'Authorization': `Bearer ${session?.access_token}` }
       });
       refetchNews();
     } catch (err) {

@@ -144,12 +144,19 @@ export async function GET(request: Request) {
         awayScorers: awayGoals 
       };
     }
+const { data: fantasyUsers } = await supabase
+      .from('user_profiles') 
+      .select('id, nickname, points') 
+      .order('points', { ascending: false })
+      .limit(3);
 
-    const fantasyTop = [
-      { id: 1, name: "Sreerag", points: 8520 },
-      { id: 2, name: "Pranav", points: 8150 },
-      { id: 3, name: "Alen", points: 7900 }
-    ];
+    // Map the database response to match what the frontend expects.
+    // If there is no data, it safely defaults to an empty array [] !
+    const fantasyTop = fantasyUsers?.map((user: any) => ({
+      id: user.id,
+      name: user.nickname || 'Unknown User',
+      points: user.points || 0
+    })) || [];
 
     return NextResponse.json({
       success: true,
@@ -159,7 +166,7 @@ export async function GET(request: Request) {
         topScorer: scorers?.[0] ? { name: scorers[0].name, club: scorers[0].club, stat: scorers[0].goalsScored } : null,
         topAssist: assists?.[0] ? { name: assists[0].name, club: assists[0].club, stat: assists[0].assists || 0 } : null,
         liveMatch: liveMatchData,
-        fantasyTop: fantasyTop
+        fantasyTop: fantasyTop // Now fully dynamic! Will be empty if no users exist.
       }
     });
 
