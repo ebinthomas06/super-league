@@ -232,30 +232,31 @@ export function Fantasy() {
         </p>
 
         {/* Scoring rules */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 text-left mx-auto max-w-2xl mt-4">
-          <h3 className="text-lg font-black uppercase tracking-widest text-white mb-4 border-b border-white/10 pb-2">How Scoring Works</h3>
-          <div className="space-y-4 text-sm font-medium text-zinc-300">
-            <div>
-              <p className="text-white font-bold text-base mb-1">Match Result & Scoreline</p>
-              <ul className="list-disc list-inside space-y-1 ml-2 text-zinc-400">
-                <li><span className="text-white font-bold">3 Points</span> — exact final score</li>
-                <li><span className="text-white font-bold">1 Point</span> — correct result (win/draw/loss)</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-white font-bold text-base mb-1">Goalscorers & Assists</p>
-              <ul className="list-disc list-inside space-y-1 ml-2 text-zinc-400">
-                <li><span className="text-white font-bold">2 Points</span> per correct goalscorer</li>
-                <li><span className="text-white font-bold">1 Point</span> per correct assist</li>
-              </ul>
-              <div className="mt-3 bg-black/40 p-4 rounded-xl border border-white/5 text-xs text-zinc-400 leading-relaxed relative overflow-hidden">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
-                <span className="text-white font-black uppercase tracking-wider block mb-1">Frequency Strategy</span>
-                You can pick the same player multiple times. The system counts totals, not order.
-              </div>
-            </div>
-          </div>
-        </div>
+<div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 text-left mx-auto max-w-2xl mt-4">
+  <h3 className="text-lg font-black uppercase tracking-widest text-white mb-4 border-b border-white/10 pb-2">How Scoring Works</h3>
+  <div className="space-y-4 text-sm font-medium text-zinc-300">
+    <div>
+      <p className="text-white font-bold text-base mb-1">Match Result & Scoreline</p>
+      <ul className="list-disc list-inside space-y-1 ml-2 text-zinc-400">
+        <li><span className="text-white font-bold">300 Points</span> — exact final score</li>
+        <li><span className="text-white font-bold">100 Points</span> — correct result (win/draw/loss)</li>
+        <li><span className="text-red-400 font-bold">-10 Points</span> — penalty per incorrect goal difference</li>
+      </ul>
+    </div>
+    <div>
+      <p className="text-white font-bold text-base mb-1">Goalscorers & Assists</p>
+      <ul className="list-disc list-inside space-y-1 ml-2 text-zinc-400">
+        <li><span className="text-white font-bold">100 Points</span> per correct goalscorer</li>
+        <li><span className="text-white font-bold">50 Points</span> per correct assist</li>
+      </ul>
+      <div className="mt-3 bg-black/40 p-4 rounded-xl border border-white/5 text-xs text-zinc-400 leading-relaxed relative overflow-hidden">
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
+        <span className="text-white font-black uppercase tracking-wider block mb-1">Frequency Strategy</span>
+        You can pick the same player multiple times. The system counts totals, not order.
+      </div>
+    </div>
+  </div>
+</div>
       </div>
 
       {/* Prediction Form */}

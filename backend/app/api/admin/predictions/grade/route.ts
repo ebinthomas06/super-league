@@ -4,7 +4,6 @@ import { cookies } from 'next/headers';
 import { handleError } from '../../../../../lib/errorHandler';
 
 // --- THE FREQUENCY ALGORITHM ---
-// 1. Converts an array like ["messi", "messi", "ronaldo"] into a Hash Map: { "messi": 2, "ronaldo": 1 }
 function getFrequencyMap(arr: string[] | null) {
   const map: Record<string, number> = {};
   for (const item of (arr || [])) {
@@ -13,7 +12,6 @@ function getFrequencyMap(arr: string[] | null) {
   return map;
 }
 
-// 2. Compares the predicted map vs the actual map to calculate points
 function calculatePlayerPoints(predicted: string[], actual: string[], pointsPerMatch: number) {
   const predMap = getFrequencyMap(predicted);
   const actMap = getFrequencyMap(actual);
@@ -21,7 +19,6 @@ function calculatePlayerPoints(predicted: string[], actual: string[], pointsPerM
 
   for (const [playerId, predictedCount] of Object.entries(predMap)) {
     if (actMap[playerId]) {
-      // If they guessed he scores 3 times, but he only scores 2 times, they only get points for 2.
       const matches = Math.min(predictedCount, actMap[playerId]);
       points += matches * pointsPerMatch;
     }
@@ -39,11 +36,9 @@ export async function POST(request: Request) {
       cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     });
 
-    // 1. SECURE THE ROUTE: Admins only
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: "Unauthorized" };
 
-    // 2. FETCH THE SOURCE OF TRUTH (The completed match data)
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select('home_score, away_score, scorers, assists, status')
@@ -53,7 +48,6 @@ export async function POST(request: Request) {
     if (matchError || !match) throw { status: 404, message: "Match not found." };
     if (match.status !== 'completed') throw { status: 400, message: "Match must be marked 'completed' before grading." };
 
-    // 3. FETCH THE BETS (All predictions for this match)
     const { data: predictions, error: predError } = await supabase
       .from('predictions')
       .select('*')
@@ -64,51 +58,73 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "No predictions found for this match." });
     }
 
-    // 4. THE GRADING LOOP
+    // --- 4. THE NEW GRADING LOOP ---
     const gradePromises = predictions.map(async (prediction) => {
       let totalPoints = 0;
 
-      // Stage A: Scoreline Logic
       const predHome = prediction.predicted_home_score;
       const predAway = prediction.predicted_away_score;
       const actHome = match.home_score;
       const actAway = match.away_score;
 
+      // Stage A: Scoreline Logic
       if (predHome === actHome && predAway === actAway) {
-        totalPoints += 3; // 3 Points: Exact score
+        totalPoints += 300; // 300 Points: Exact score
       } else {
-        // 1 Point: Correct Result (Win/Loss/Draw) but wrong exact score
         const predDiff = predHome - predAway;
         const actDiff = actHome - actAway;
         
+        // 100 Points: Correct Result (Win/Loss/Draw) but wrong exact score
         if (
           (predDiff > 0 && actDiff > 0) || // Both predicted home win
           (predDiff < 0 && actDiff < 0) || // Both predicted away win
           (predDiff === 0 && actDiff === 0) // Both predicted draw
         ) {
-          totalPoints += 1;
+          const basePoints = 100;
+          // Penalty: 10 points deducted per wrong goal
+          const goalError = Math.abs(predHome - actHome) + Math.abs(predAway - actAway);
+          const penalty = goalError * 10;
+          
+          totalPoints += (basePoints - penalty); 
         }
       }
 
       // Stage B: Player Actions Logic
-      // 2 points per correct goalscorer
-      totalPoints += calculatePlayerPoints(prediction.predicted_scorers, match.scorers || [], 2);
-      // 1 point per correct assist
-      totalPoints += calculatePlayerPoints(prediction.predicted_assists, match.assists || [], 1);
+      totalPoints += calculatePlayerPoints(prediction.predicted_scorers, match.scorers || [], 100); // 100 per goal
+      totalPoints += calculatePlayerPoints(prediction.predicted_assists, match.assists || [], 50); // 50 per assist
 
-      // Stage C: Update this specific prediction's points in the database
+      // Update prediction row
       return supabase
         .from('predictions')
         .update({ points_awarded: totalPoints })
         .eq('id', prediction.id);
     });
 
-    // 5. Execute all database updates in parallel using Promise.all
     await Promise.all(gradePromises);
+
+    // --- 5. AUTOMATIC GLOBAL LEADERBOARD UPDATE ---
+    // Recalculate the total score for every user who predicted in this match
+    const uniqueUsers = [...new Set(predictions.map(p => p.user_id))];
+    
+    const profilePromises = uniqueUsers.map(async (userId) => {
+      const { data: userPreds } = await supabase
+        .from('predictions')
+        .select('points_awarded')
+        .eq('user_id', userId);
+        
+      const totalScore = (userPreds || []).reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
+      
+      return supabase
+        .from('user_profiles')
+        .update({ points: totalScore })
+        .eq('id', userId);
+    });
+
+    await Promise.all(profilePromises);
 
     return NextResponse.json({ 
       success: true, 
-      message: `Successfully graded ${predictions.length} predictions!` 
+      message: `Successfully graded ${predictions.length} predictions and updated the global leaderboard!` 
     });
 
   } catch (error) {

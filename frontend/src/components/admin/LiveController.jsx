@@ -267,10 +267,48 @@ export default function LiveController() {
               <button onClick={() => { setGoalForm({ id: null, team_id: '', player_id: '', assist_id: '', minute: '', is_own_goal: false }); setShowGoalForm(true); }} className="flex items-center justify-center gap-3 bg-white text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors">
                 <Trophy size={18} /> Add Goal
               </button>
-              <button disabled={loading} onClick={() => { if(confirm("End match and lock scores?")) { setTimerRunning(false); handleAction('close_match'); } }} className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors">
-                <CheckCircle size={18} /> Final Whistle
-              </button>
-            </div>
+              <button 
+            disabled={loading} 
+            // Inside LiveController.jsx's Final Whistle button:
+onClick={async () => { 
+  if(confirm("End match, lock scores, and grade predictions?")) { 
+    setTimerRunning(false); 
+    setLoading(true);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL || '/api';
+      
+      // 1. Close the match (we bypass handleAction to avoid the double alert)
+      await fetch(`${API_URL}/admin/matches/live`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ match_id: selectedMatch.id, action: 'close_match' })
+      });
+
+      // 2. Grade it
+      await fetch(`${API_URL}/admin/predictions/grade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ match_id: selectedMatch.id })
+      });
+      
+      alert("Match Closed & Leaderboard Updated!");
+      refetch(); 
+      setShowGoalForm(false); 
+    } catch (err) {
+      console.error("Auto-grading failed:", err);
+      alert("Something went wrong. Check console.");
+    } finally {
+      setLoading(false);
+    }
+  } 
+}} 
+            className="flex items-center justify-center gap-3 bg-red-600/20 text-red-500 border border-red-500/50 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-red-600/30 transition-colors"
+          >
+            <CheckCircle2 size={18} /> Final Whistle
+          </button>
+                      </div>
           )}
 
           <div className="bg-black/50 p-6 rounded-2xl border border-white/10 mt-8 space-y-4 shadow-xl">
