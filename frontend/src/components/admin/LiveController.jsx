@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApi } from '../../hooks/useApi';
-import { Activity, Trophy, CheckCircle, X, Trash2 } from 'lucide-react';
+import { Activity, Trophy, CheckCircle, CheckCircle2, X, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 export default function LiveController() {
