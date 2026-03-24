@@ -41,6 +41,7 @@ export async function GET(request: Request) {
         status, 
         division,
         minute,
+        is_graded,
         home:teams!home_team_id(id, name),
         away:teams!away_team_id(id, name)
       `)

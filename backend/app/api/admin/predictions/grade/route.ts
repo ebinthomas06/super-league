@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js'; // MAGIC FIX 1: Import the pure client
 import { cookies } from 'next/headers';
 import { handleError } from '../../../../../lib/errorHandler';
 
-// 1. THE MAGIC FIX: Helper to read the Auth Header from the frontend!
+// 1. Authenticate the Admin User (Standard SSR Client)
 async function getSupabaseClient(request: Request) {
   const cookieStore = await cookies();
   const authHeader = request.headers.get('Authorization'); 
@@ -11,9 +12,7 @@ async function getSupabaseClient(request: Request) {
   return createServerClient(process.env.SUPABASE_URL as string, process.env.SUPABASE_ANON_KEY as string, {
     cookies: { getAll() { return cookieStore.getAll() }, setAll() {} },
     global: {
-      headers: {
-        Authorization: authHeader || '', 
-      },
+      headers: { Authorization: authHeader || '' },
     },
   });
 }
@@ -46,13 +45,27 @@ export async function POST(request: Request) {
     const body = await request.json();
     if (!body.match_id) throw { status: 400, message: "match_id is required for grading." };
 
-    // 2. USE THE HELPER HERE
+    console.log(`\n--- STARTING GRADING RUN FOR MATCH: ${body.match_id} ---`);
+
     const supabase = await getSupabaseClient(request);
 
+    // Security Check: Ensure the user clicking the button is an admin
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) throw { status: 401, message: "Unauthorized" };
 
-    const { data: match, error: matchError } = await supabase
+    // 2. MAGIC FIX 2: Create a totally isolated God Mode client (ignores all cookies/headers)
+    const supabaseAdmin = createClient(
+      process.env.SUPABASE_URL as string, 
+      process.env.SUPABASE_SERVICE_ROLE_KEY as string, 
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    const { data: match, error: matchError } = await supabaseAdmin
       .from('matches')
       .select('home_score, away_score, scorers, assists, status')
       .eq('id', body.match_id)
@@ -61,17 +74,20 @@ export async function POST(request: Request) {
     if (matchError || !match) throw { status: 404, message: "Match not found." };
     if (match.status !== 'completed') throw { status: 400, message: "Match must be marked 'completed' before grading." };
 
-    const { data: predictions, error: predError } = await supabase
+    const { data: predictions, error: predError } = await supabaseAdmin
       .from('predictions')
       .select('*')
       .eq('match_id', body.match_id);
 
     if (predError) throw predError;
     if (!predictions || predictions.length === 0) {
+      console.log("No predictions found. Aborting.");
       return NextResponse.json({ success: true, message: "No predictions found for this match." });
     }
 
-    // --- 4. THE NEW GRADING LOOP ---
+    console.log(`Found ${predictions.length} predictions. Calculating points...`);
+
+    // --- 4. THE GRADING LOOP ---
     const gradePromises = predictions.map(async (prediction) => {
       let totalPoints = 0;
 
@@ -82,19 +98,17 @@ export async function POST(request: Request) {
 
       // Stage A: Scoreline Logic
       if (predHome === actHome && predAway === actAway) {
-        totalPoints += 300; // 300 Points: Exact score
+        totalPoints += 300; 
       } else {
         const predDiff = predHome - predAway;
         const actDiff = actHome - actAway;
         
-        // 100 Points: Correct Result (Win/Loss/Draw) but wrong exact score
         if (
-          (predDiff > 0 && actDiff > 0) || // Both predicted home win
-          (predDiff < 0 && actDiff < 0) || // Both predicted away win
-          (predDiff === 0 && actDiff === 0) // Both predicted draw
+          (predDiff > 0 && actDiff > 0) || 
+          (predDiff < 0 && actDiff < 0) || 
+          (predDiff === 0 && actDiff === 0) 
         ) {
           const basePoints = 100;
-          // Penalty: 10 points deducted per wrong goal
           const goalError = Math.abs(predHome - actHome) + Math.abs(predAway - actAway);
           const penalty = goalError * 10;
           
@@ -103,43 +117,58 @@ export async function POST(request: Request) {
       }
 
       // Stage B: Player Actions Logic
-      totalPoints += calculatePlayerPoints(prediction.predicted_scorers, match.scorers || [], 100); // 100 per goal
-      totalPoints += calculatePlayerPoints(prediction.predicted_assists, match.assists || [], 50); // 50 per assist
+      totalPoints += calculatePlayerPoints(prediction.predicted_scorers, match.scorers || [], 100); 
+      totalPoints += calculatePlayerPoints(prediction.predicted_assists, match.assists || [], 50); 
 
-      // Update prediction row
-      return supabase
+      // Update using God Mode client!
+      const { error: updateErr } = await supabaseAdmin
         .from('predictions')
-        .update({ points_awarded: totalPoints ,status: 'graded'})
+        .update({ points_awarded: totalPoints, status: 'graded' })
         .eq('id', prediction.id);
+        
+      if (updateErr) {
+        console.error(`❌ [ERROR] Failed to update prediction ${prediction.id}:`, updateErr.message);
+      } else {
+        console.log(`✅ [SUCCESS] Graded prediction ${prediction.id} | Points: ${totalPoints}`);
+      }
     });
 
     await Promise.all(gradePromises);
+    console.log("--- Finished Grading Predictions. Starting Leaderboard Sync ---");
 
     // --- 5. AUTOMATIC GLOBAL LEADERBOARD UPDATE ---
     const uniqueUsers = [...new Set(predictions.map(p => p.user_id))];
     
     const profilePromises = uniqueUsers.map(async (userId) => {
-      const { data: userPreds } = await supabase
+      const { data: userPreds } = await supabaseAdmin
         .from('predictions')
         .select('points_awarded')
         .eq('user_id', userId);
         
       const totalScore = (userPreds || []).reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
       
-      return supabase
+      const { error: profileErr } = await supabaseAdmin
         .from('user_profiles')
         .update({ points: totalScore })
         .eq('id', userId);
+        
+      if (profileErr) {
+        console.error(`❌ [ERROR] Failed to sync profile for user ${userId}:`, profileErr.message);
+      } else {
+        console.log(`📈 [SYNC] Updated user ${userId} to ${totalScore} total points.`);
+      }
     });
 
     await Promise.all(profilePromises);
-
+    console.log("--- Grading Run Complete! ---\n");
+    await supabaseAdmin.from('matches').update({ is_graded: true }).eq('id', body.match_id);
     return NextResponse.json({ 
       success: true, 
       message: `Successfully graded ${predictions.length} predictions and updated the global leaderboard!` 
     });
 
   } catch (error) {
+    console.error("FATAL GRADING ERROR:", error);
     return handleError(error, "Grade Predictions Engine");
   }
 }
