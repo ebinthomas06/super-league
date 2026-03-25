@@ -145,7 +145,7 @@ function TeamOverview({ team, allPlayers, onBack, onSelectPlayer, onSelectMatch 
                     className="flex items-center gap-2 px-3 py-2 sm:px-4 border border-white/10 bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-sm font-bold"
                 >
                     <ArrowLeft size={16} />
-                    <span className="hidden sm:inline">Back to Teams</span>
+                    <span className="hidden sm:inline">Back to Clubs</span>
                 </button>
             </div>
 
@@ -247,7 +247,7 @@ export function Teams() {
     };
 
     if (teamsLoading) {
-        return <Loader text="Loading Teams..." />;
+        return <Loader text="Loading Clubs..." />;
     }
 
     if (teamsError || teams.length === 0) {
@@ -278,7 +278,7 @@ export function Teams() {
     return (
         <div className="space-y-6 animate-in fade-in duration-500 pb-12">
             <h1 className="text-3xl sm:text-5xl font-black tracking-tighter uppercase">
-                Teams <span className="text-zinc-600">Overview</span>
+                Clubs <span className="text-zinc-600">Overview</span>
             </h1>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
