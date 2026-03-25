@@ -87,11 +87,11 @@ export function TopNavbar() {
                 <div className="flex items-center gap-2 sm:gap-4">
                     {user ? (
                         <button
-                            onClick={signOut}
+                            onClick={() => setView('profile')}
                             className="flex items-center gap-2 px-3 py-1.5 sm:px-4 border border-white/20 rounded-full text-sm font-medium hover:bg-white/5 transition-colors"
                         >
                             <User size={16} />
-                            <span className="hidden sm:inline">Sign Out</span>
+                            <span className="hidden sm:inline">Profile</span>
                         </button>
                     ) : (
                         <button
