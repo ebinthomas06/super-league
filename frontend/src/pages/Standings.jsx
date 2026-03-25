@@ -83,8 +83,8 @@ function WomensBracket({ matches = [] }) {
                 </div>
                 <div className="space-y-6">
                     <h3 className="text-center font-black text-zinc-500 uppercase tracking-widest text-sm border-b border-white/10 pb-4">4. Finals</h3>
-                    <MatchCard title="Final" {...final} />
-                    <MatchCard title="Losers Final" {...losers} />
+                    <MatchCard title="Loser's Final" {...final} />
+                    <MatchCard title="Final" {...losers} />
                 </div>
             </div>
         </div>
