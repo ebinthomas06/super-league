@@ -165,8 +165,8 @@ const { data: fantasyUsers } = await supabase
       data: {
         standings: top4, 
         news: news || [],
-        topScorer: scorers?.[0] ? { name: scorers[0].name, club: scorers[0].club, stat: scorers[0].goalsScored } : null,
-        topAssist: assists?.[0] ? { name: assists[0].name, club: assists[0].club, stat: assists[0].assists || 0 } : null,
+        topScorer: scorers?.[0] ? (() => { console.log('RAW SCORER ROW:', JSON.stringify(scorers[0])); return { playerId: scorers[0].playerId || scorers[0].id || scorers[0].player_id, name: scorers[0].name || scorers[0].playerName, club: scorers[0].club || scorers[0].teamName, stat: scorers[0].goalsScored }; })() : null,
+        topAssist: assists?.[0] ? { playerId: assists[0].playerId || assists[0].id || assists[0].player_id, name: assists[0].name || assists[0].playerName, club: assists[0].club || assists[0].teamName, stat: assists[0].assists || 0 } : null,
         liveMatch: liveMatchData,
         fantasyTop: fantasyTop // Now fully dynamic! Will be empty if no users exist.
       }

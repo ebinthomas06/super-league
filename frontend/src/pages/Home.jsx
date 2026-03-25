@@ -236,7 +236,12 @@ export function Home() {
                     />
                     <div className="flex flex-col gap-4">
                         {topScorer && (
-                            <GlassPanel className="p-6 relative overflow-hidden group min-w-0">
+                            <GlassPanel className="p-6 relative overflow-hidden group min-w-0 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => {
+                                if (topScorer.playerId) {
+                                    sessionStorage.setItem('selectedPlayer', JSON.stringify({ id: topScorer.playerId }));
+                                    setView('player-profile');
+                                }
+                            }}>
                                 <Goal className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
                                 <h4 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase mb-4 truncate">Golden Boot</h4>
                                 <div className="relative z-10">
@@ -251,7 +256,12 @@ export function Home() {
                         )}
 
                         {topAssist && (
-                            <GlassPanel className="p-6 relative overflow-hidden group min-w-0">
+                            <GlassPanel className="p-6 relative overflow-hidden group min-w-0 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => {
+                                if (topAssist.playerId) {
+                                    sessionStorage.setItem('selectedPlayer', JSON.stringify({ id: topAssist.playerId }));
+                                    setView('player-profile');
+                                }
+                            }}>
                                 <Zap className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
                                 <h4 className="text-[10px] font-black tracking-widest text-zinc-500 uppercase mb-4 truncate">Playmaker</h4>
                                 <div className="relative z-10">
