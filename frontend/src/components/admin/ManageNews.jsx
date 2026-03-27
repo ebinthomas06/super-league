@@ -11,7 +11,7 @@ export default function ManageNews() {
 
   const [loading, setLoading] = useState(false);
   const [heroImageFile, setHeroImageFile] = useState(null);
-  const [form, setForm] = useState({ title: '', summary: '' });
+  const [form, setForm] = useState({ title: '', summary: '' ,category: 'Latest News'});
   
   // The Lego Blocks!
   const [contentBlocks, setContentBlocks] = useState([{ id: Date.now(), type: 'paragraph', value: '' }]);
@@ -68,6 +68,7 @@ export default function ManageNews() {
         body: JSON.stringify({ 
           title: form.title, 
           summary: form.summary, 
+          category: form.category,
           image_url: finalHeroUrl, 
           content: processedBlocks 
         })
@@ -119,7 +120,17 @@ export default function ManageNews() {
           <div className="space-y-4">
             <input type="text" placeholder="Headline / Title" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 outline-none focus:border-[#E8C881]/50 text-xl font-black text-white" />
             <textarea placeholder="Short Summary (Subtitle)" required value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 text-sm text-zinc-300 h-20 resize-none" />
-            
+            {/* ADD THIS CATEGORY DROPDOWN */}
+            <select 
+              value={form.category} 
+              onChange={e => setForm({...form, category: e.target.value})} 
+              className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 outline-none focus:border-[#E8C881]/50 text-sm font-bold text-white cursor-pointer"
+            >
+              <option value="Latest News">Latest News</option>
+              <option value="Match Reports">Match Reports</option>
+              <option value="Satire">Satire</option>
+              <option value="Features">Features</option>
+            </select>
             <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Hero Image</span>
               <UploadCloud size={16} className="text-zinc-500" />
