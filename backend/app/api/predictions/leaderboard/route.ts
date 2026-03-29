@@ -9,7 +9,6 @@ export async function GET() {
   try {
     const cookieStore = await cookies();
     
-    // We can safely use the standard ANON key because user_profiles is public!
     const supabase = createServerClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_ANON_KEY!,
@@ -18,31 +17,31 @@ export async function GET() {
       }
     );
 
-    // 1. Fetch the top 100 users straight from the profiles table
+    // 1. Fetch the top 100 users, including both new flair columns
     const { data: profiles, error } = await supabase
       .from('user_profiles')
-      .select('id, nickname, real_name, email, points, team_flair_id')
+      .select('id, nickname, real_name, email, points, mens_team_flair, womens_team_flair')
       .gt('points', 0)
-      .order('points', { ascending: false }) // Highest points first!
+      .order('points', { ascending: false })
       .limit(100);
 
     if (error) throw error;
 
-    // 2. Format it to match exactly what your frontend expects
+    // 2. Map BOTH flairs to the frontend
     const overall = profiles.map(p => ({
       user_id: p.id,
       username: p.nickname || p.real_name || p.email?.split('@')[0] || `Fan_${p.id.substring(0, 5)}`,
       total_points: p.points || 0,
-      team_flair: p.team_flair_id || null
+      mens_team_flair: p.mens_team_flair || null,
+      womens_team_flair: p.womens_team_flair || null
     }));
 
-    // 3. Return the contract
     return NextResponse.json({
       success: true,
       data: {
         overall: overall,
-        top_scorers_predictor: [], // Left empty since the UI doesn't use it
-        top_assists_predictor: []  // Left empty since the UI doesn't use it
+        top_scorers_predictor: [],
+        top_assists_predictor: []
       }
     });
 

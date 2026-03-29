@@ -39,7 +39,7 @@ function AuthGuard() {
     );
   }
 
-  if (user && (!profile?.nickname || !profile?.team_flair_id)) {
+  if (user && (!profile?.nickname || !profile?.team_flair_id|| !profile.womens_team_flair)) {
     return <Onboarding />;
   }
 

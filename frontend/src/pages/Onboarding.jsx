@@ -7,32 +7,38 @@ import { Send, User } from 'lucide-react';
 export function Onboarding() {
   const { user, setProfile, signOut } = useAuth();
   const [nickname, setNickname] = useState('');
-  const [flair, setFlair] = useState('');
+  const [mensFlair, setMensFlair] = useState('');
+  const [womensFlair, setWomensFlair] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [allTeams, setAllTeams] = useState([]);
+  
+  const [mensTeams, setMensTeams] = useState([]);
+  const [womensTeams, setWomensTeams] = useState([]);
 
   useEffect(() => {
     const fetchAllTeams = async () => {
       const { data } = await supabase.from('teams').select('*').order('name');
-      if (data) setAllTeams(data);
+      if (data) {
+        setMensTeams(data.filter(t => t.division === 'mens'));
+        setWomensTeams(data.filter(t => t.division === 'womens'));
+      }
     };
     fetchAllTeams();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nickname.trim() || !flair) return;
+    if (!nickname.trim() || !mensFlair || !womensFlair) return;
     
     setSaving(true);
     setError(null);
 
     const updatedProfile = {
       nickname: nickname.trim(),
-      team_flair_id: flair,
+      mens_team_flair: mensFlair,
+      womens_team_flair: womensFlair,
     };
 
-    // The trigger already created the user_profiles row on signup — we just UPDATE it
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update(updatedProfile)
@@ -51,7 +57,6 @@ export function Onboarding() {
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background aesthetics */}
       <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-white/5 rounded-full blur-[120px] -z-10 mix-blend-screen" />
 
       <GlassPanel className="max-w-lg w-full p-8 text-center relative z-10 border border-white/10 bg-black/60 backdrop-blur-2xl">
@@ -84,32 +89,43 @@ export function Onboarding() {
               maxLength={20}
               minLength={3}
             />
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-2 ml-1">Visible on global leaderboards.</p>
           </div>
 
-          <div>
-            <label className="block text-xs font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-              Select Team Flair
-            </label>
-            <select
-              value={flair}
-              onChange={(e) => setFlair(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none"
-              required
-            >
-              <option value="" disabled>Select a Club...</option>
-              {allTeams.map((t) => (
-                <option key={t.id} value={t.name} className="bg-zinc-900">
-                  {t.name} ({t.division === 'womens' ? "Women's" : "Men's"})
-                </option>
-              ))}
-                </select>
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-2 ml-1">Shows your allegiance next to your name.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
+                Men's Team Flair
+              </label>
+              <select
+                value={mensFlair}
+                onChange={(e) => setMensFlair(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                required
+              >
+                <option value="" disabled>Select Club...</option>
+                {mensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
+                Women's Team Flair
+              </label>
+              <select
+                value={womensFlair}
+                onChange={(e) => setWomensFlair(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                required
+              >
+                <option value="" disabled>Select Club...</option>
+                {womensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <button
             type="submit"
-            disabled={saving || !nickname || !flair}
+            disabled={saving || !nickname || !mensFlair || !womensFlair}
             className="w-full group h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
           >
             {saving ? "Saving..." : "Enter The League"}

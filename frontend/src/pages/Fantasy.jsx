@@ -56,6 +56,15 @@ export function Fantasy() {
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState(null);
 
+    // REDIRECT TO ONBOARDING IF MISSING NEW DUAL FLAIRS
+    useEffect(() => {
+        if (user && profile) {
+            if (!profile.mens_team_flair || !profile.womens_team_flair) {
+                window.location.href = '/?view=onboarding'; 
+            }
+        }
+    }, [user, profile]);
+
     // Reset form when division changes
     useEffect(() => {
         setSelectedMatchId('');
@@ -84,7 +93,7 @@ export function Fantasy() {
     const allPlayers = playersResp?.data || [];
     const selectedMatch = upcomingMatches.find(m => m.id === selectedMatchId);
 
-    // NEW: Check if the match has already kicked off!
+    // Check if the match has already kicked off
     const isMatchStarted = useMemo(() => {
         if (!selectedMatch) return false;
 
@@ -101,7 +110,7 @@ export function Fantasy() {
         return false;
     }, [selectedMatch]);
 
-    // MAGIC FIX: Check if they already predicted when they select a match!
+    // Check if they already predicted when they select a match
     useEffect(() => {
         const checkPredictionStatus = async () => {
             if (!selectedMatchId) return;
@@ -231,6 +240,9 @@ export function Fantasy() {
     const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
     const myPoints = myEntry ? myEntry.total_points : 0;
     const myName = profile?.nickname || user?.user_metadata?.full_name || user?.user_metadata?.name || 'Player';
+    
+    // Determine which flair to show for the current user based on the active division
+    const myActiveFlair = division === 'mens' ? profile?.mens_team_flair : profile?.womens_team_flair;
 
     if (scheduleLoading) {
         return <Loader text="Loading Predictor Engine..." />;
@@ -252,35 +264,35 @@ export function Fantasy() {
                     Predict match outcomes to climb the global leaderboard.
                 </p>
 
-        {/* User Stats Banner */}
-        {user && !lbLoading && (
-          <div className="bg-white/10 border border-white/20 rounded-2xl p-4 sm:p-6 flex items-center justify-between max-w-2xl mx-auto mt-6 shadow-xl backdrop-blur-md transition-all hover:bg-white/15">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center font-black text-2xl flex-shrink-0">
-                {myName.charAt(0).toUpperCase()}
-              </div>
-              <div className="text-left">
-                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1.5 pt-1">Player</p>
-                <div className="flex flex-col items-start gap-1">
-                  <p className="text-xl sm:text-2xl font-black text-white leading-none">{myName}</p>
-                  {profile?.team_flair_id && (
-                    <span className={cn("px-2 py-[2px] rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(profile.team_flair_id))}>
-                      {profile.team_flair_id}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end justify-center">
-              <div className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400 leading-none mb-1.5 pt-1">
-                {myPoints.toLocaleString()}
-              </div>
-              <p className="text-[10px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest leading-none">
-                PTS
-              </p>
-            </div>
-          </div>
-        )}
+                {/* User Stats Banner */}
+                {user && !lbLoading && (
+                    <div className="bg-white/10 border border-white/20 rounded-2xl p-4 sm:p-6 flex items-center justify-between max-w-2xl mx-auto mt-6 shadow-xl backdrop-blur-md transition-all hover:bg-white/15">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center font-black text-2xl flex-shrink-0">
+                                {myName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="text-left">
+                                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1.5 pt-1">Player</p>
+                                <div className="flex flex-col items-start gap-1">
+                                    <p className="text-xl sm:text-2xl font-black text-white leading-none">{myName}</p>
+                                    {myActiveFlair && (
+                                        <span className={cn("px-2 py-[2px] rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(myActiveFlair))}>
+                                            {myActiveFlair}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end justify-center">
+                            <div className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400 leading-none mb-1.5 pt-1">
+                                {myPoints.toLocaleString()}
+                            </div>
+                            <p className="text-[10px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest leading-none">
+                                PTS
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Scoring rules */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 text-left mx-auto max-w-2xl mt-4">
@@ -494,61 +506,67 @@ export function Fantasy() {
                     <Crown className="w-6 h-6 text-zinc-500" />
                 </div>
 
-        {lbLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-zinc-600" />
-          </div>
-        ) : leaderboard.length === 0 ? (
-          <p className="text-center text-zinc-600 font-bold uppercase tracking-widest text-sm py-8">
-            No predictions graded yet. Be the first!
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {leaderboard.map((entry, index) => {
-              const isMe = entry.user_id === user?.id;
-              return (
-                <div
-                  key={entry.user_id}
-                  className={cn(
-                    "flex items-center justify-between p-4 sm:p-5 border rounded-2xl transition-all",
-                    isMe
-                      ? "bg-white/10 border-white/40"
-                      : index === 0
-                      ? "bg-white/5 border-white/20"
-                      : "bg-black/40 border-white/5 hover:bg-white/5"
-                  )}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={cn(
-                      "w-10 h-10 flex items-center justify-center rounded-full font-black text-lg",
-                      isMe ? "bg-white text-black" : index === 0 ? "bg-white text-black" : "bg-white/5 text-zinc-400"
-                    )}>
-                      {index + 1}
+                {lbLoading ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-zinc-600" />
                     </div>
-                    <span className="font-bold text-white text-lg flex flex-col items-start leading-tight">
-                      <div className="flex items-center">
-                        {isMe ? myName : entry.username}
-                        {isMe && <span className="ml-2 text-[10px] bg-white text-black px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
-                      </div>
-                      {entry.team_flair && (
-                        <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(entry.team_flair))}>
-                          {entry.team_flair}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">
-                      {entry.total_points.toLocaleString()}
-                    </span>
-                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block">PTS</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+                ) : leaderboard.length === 0 ? (
+                    <p className="text-center text-zinc-600 font-bold uppercase tracking-widest text-sm py-8">
+                        No predictions graded yet. Be the first!
+                    </p>
+                ) : (
+                    <div className="space-y-3">
+                        {leaderboard.map((entry, index) => {
+                            const isMe = entry.user_id === user?.id;
+                            return (
+                                <div
+                                    key={entry.user_id}
+                                    className={cn(
+                                        "flex items-center justify-between p-4 sm:p-5 border rounded-2xl transition-all",
+                                        isMe
+                                            ? "bg-white/10 border-white/40"
+                                            : index === 0
+                                                ? "bg-white/5 border-white/20"
+                                                : "bg-black/40 border-white/5 hover:bg-white/5"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn(
+                                            "w-10 h-10 flex items-center justify-center rounded-full font-black text-lg",
+                                            isMe ? "bg-white text-black" : index === 0 ? "bg-white text-black" : "bg-white/5 text-zinc-400"
+                                        )}>
+                                            {index + 1}
+                                        </div>
+                                        <span className="font-bold text-white text-lg flex flex-col items-start leading-tight">
+                                            <div className="flex items-center">
+                                                {isMe ? myName : entry.username}
+                                                {isMe && <span className="ml-2 text-[10px] bg-white text-black px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
+                                            </div>
+                                            
+                                            {/* DYNAMIC FLAIR BASED ON DIVISION */}
+                                            {(() => {
+                                                const activeLbFlair = division === 'mens' ? entry.mens_team_flair : entry.womens_team_flair;
+                                                if (!activeLbFlair) return null;
+                                                return (
+                                                    <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(activeLbFlair))}>
+                                                        {activeLbFlair}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">
+                                            {entry.total_points.toLocaleString()}
+                                        </span>
+                                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block">PTS</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 }
