@@ -11,7 +11,7 @@ export default function ManageNews() {
 
   const [loading, setLoading] = useState(false);
   const [heroImageFile, setHeroImageFile] = useState(null);
-  const [form, setForm] = useState({ title: '', summary: '' ,category: 'Latest News'});
+  const [form, setForm] = useState({ title: '', summary: '', category: 'Official Editorial' });
   
   // The Lego Blocks!
   const [contentBlocks, setContentBlocks] = useState([{ id: Date.now(), type: 'paragraph', value: '' }]);
@@ -70,14 +70,15 @@ export default function ManageNews() {
           summary: form.summary, 
           category: form.category,
           image_url: finalHeroUrl, 
-          content: processedBlocks 
+          content: processedBlocks,
+          category: form.category 
         })
       });
 
       if (res.ok) {
         alert("Article Published!");
         refetchNews();
-        setForm({ title: '', summary: '' });
+        setForm({ title: '', summary: '', category: 'Official Editorial' });
         setHeroImageFile(null);
         setContentBlocks([{ id: Date.now(), type: 'paragraph', value: '' }]);
       } else {
@@ -131,6 +132,18 @@ export default function ManageNews() {
               <option value="Satire">Satire</option>
               <option value="Features">Features</option>
             </select>
+            <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Category</span>
+              <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-transparent outline-none text-sm text-zinc-300 cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white">
+                <option value="Official Editorial">Official Editorial</option>
+                <option value="Match Report">Match Report</option>
+                <option value="Transfer News">Transfer News</option>
+                <option value="Satire">Satire</option>
+                <option value="News">News</option>
+                <option value="Announcement">Announcement</option>
+              </select>
+            </div>
+            
             <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Hero Image</span>
               <UploadCloud size={16} className="text-zinc-500" />
