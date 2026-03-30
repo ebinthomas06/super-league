@@ -36,7 +36,7 @@ export async function POST(request: Request) {
         author: user.email || user.id, 
         image_url: body.image_url || null,
         content: body.content || [], 
-        category: body.category || 'Latest News',
+        category: body.category || 'Official Editorial',
         date: new Date().toISOString()
       }])
       .select()

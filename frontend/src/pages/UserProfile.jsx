@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLeague } from '../context/LeagueContext';
+import { useApi } from '../hooks/useApi';
 import { supabase } from '../lib/supabase';
 import { GlassPanel } from '../components/GlassPanel';
-import { Send, User, LogOut } from 'lucide-react';
+import { Send, User, LogOut, Trophy, Medal } from 'lucide-react';
 import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
 
@@ -29,7 +30,15 @@ const getTeamColorClass = (teamName) => {
 export function UserProfile() {
   const { user, profile, setProfile, signOut } = useAuth();
   const { setView } = useLeague();
+  const { data: lbResp, loading: lbLoading } = useApi('/predictions/leaderboard');
+
+  // Compute fantasy rank and points safely
+  const leaderboard = lbResp?.data?.overall || [];
+  const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
+  const myPoints = myEntry ? myEntry.total_points : 0;
+  const myRank = myEntry ? leaderboard.findIndex(e => e.user_id === user?.id) + 1 : null;
   
+  // Initialize state with fallbacks to prevent undefined errors
   const [nickname, setNickname] = useState(profile?.nickname || '');
   const [mensFlair, setMensFlair] = useState(profile?.mens_team_flair || '');
   const [womensFlair, setWomensFlair] = useState(profile?.womens_team_flair || '');
@@ -86,10 +95,14 @@ export function UserProfile() {
     setTimeout(() => setSuccess(false), 3000);
   };
 
+  // FIX 1: Safely compare state to profile values (accounting for nulls)
   const hasChanges = 
-    nickname !== profile?.nickname || 
-    mensFlair !== profile?.mens_team_flair || 
-    womensFlair !== profile?.womens_team_flair;
+    nickname !== (profile?.nickname || '') || 
+    mensFlair !== (profile?.mens_team_flair || '') || 
+    womensFlair !== (profile?.womens_team_flair || '');
+
+  // FIX 3: Safety catch to prevent crashes if user data isn't loaded yet
+  if (!user) return null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12 w-full max-w-2xl mx-auto mt-8">
@@ -120,6 +133,27 @@ export function UserProfile() {
                   </span>
               )}
             </div>
+            {/* FIX 2: Legacy team_flair_id badge block was removed from here! */}
+
+            {/* Fantasy Stats */}
+            {!lbLoading && (
+              <div className="flex items-center gap-4 mt-6 w-full max-w-xs">
+                <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    {myRank && myRank <= 3 && <Trophy size={14} className="text-yellow-500" />}
+                    <span className="text-2xl font-black text-white">{myRank ? `#${myRank}` : '—'}</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Rank</p>
+                </div>
+                <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <Medal size={14} className="text-zinc-400" />
+                    <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400">{myPoints.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Fantasy Pts</p>
+                </div>
+              </div>
+            )}
         </div>
 
         {error && (
