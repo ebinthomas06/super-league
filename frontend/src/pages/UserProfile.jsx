@@ -32,30 +32,38 @@ export function UserProfile() {
   const { setView } = useLeague();
   const { data: lbResp, loading: lbLoading } = useApi('/predictions/leaderboard');
 
-  // Compute fantasy rank and points
+  // Compute fantasy rank and points safely
   const leaderboard = lbResp?.data?.overall || [];
   const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
   const myPoints = myEntry ? myEntry.total_points : 0;
   const myRank = myEntry ? leaderboard.findIndex(e => e.user_id === user?.id) + 1 : null;
   
+  // Initialize state with fallbacks to prevent undefined errors
   const [nickname, setNickname] = useState(profile?.nickname || '');
-  const [flair, setFlair] = useState(profile?.team_flair_id || '');
+  const [mensFlair, setMensFlair] = useState(profile?.mens_team_flair || '');
+  const [womensFlair, setWomensFlair] = useState(profile?.womens_team_flair || '');
+  
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
-  const [allTeams, setAllTeams] = useState([]);
+  
+  const [mensTeams, setMensTeams] = useState([]);
+  const [womensTeams, setWomensTeams] = useState([]);
 
   useEffect(() => {
     const fetchAllTeams = async () => {
       const { data } = await supabase.from('teams').select('*').order('name');
-      if (data) setAllTeams(data);
+      if (data) {
+        setMensTeams(data.filter(t => t.division === 'mens'));
+        setWomensTeams(data.filter(t => t.division === 'womens'));
+      }
     };
     fetchAllTeams();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nickname.trim() || !flair) return;
+    if (!nickname.trim() || !mensFlair || !womensFlair) return;
     
     setSaving(true);
     setError(null);
@@ -63,7 +71,8 @@ export function UserProfile() {
 
     const updatedProfile = {
       nickname: nickname.trim(),
-      team_flair_id: flair,
+      mens_team_flair: mensFlair,
+      womens_team_flair: womensFlair,
     };
 
     const { error: updateError } = await supabase
@@ -86,7 +95,14 @@ export function UserProfile() {
     setTimeout(() => setSuccess(false), 3000);
   };
 
-  const hasChanges = nickname !== profile?.nickname || flair !== profile?.team_flair_id;
+  // FIX 1: Safely compare state to profile values (accounting for nulls)
+  const hasChanges = 
+    nickname !== (profile?.nickname || '') || 
+    mensFlair !== (profile?.mens_team_flair || '') || 
+    womensFlair !== (profile?.womens_team_flair || '');
+
+  // FIX 3: Safety catch to prevent crashes if user data isn't loaded yet
+  if (!user) return null;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12 w-full max-w-2xl mx-auto mt-8">
@@ -104,11 +120,20 @@ export function UserProfile() {
             <div className="flex items-center gap-2">
                 <span className="text-2xl font-black text-white">{profile?.nickname || 'Unknown'}</span>
             </div>
-            {profile?.team_flair_id && (
-                <span className={cn("px-3 py-1 mt-2 rounded-full text-xs text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.team_flair_id))}>
-                    {profile.team_flair_id}
-                </span>
-            )}
+            
+            <div className="flex gap-2 mt-3">
+              {profile?.mens_team_flair && (
+                  <span className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.mens_team_flair))}>
+                      M: {profile.mens_team_flair}
+                  </span>
+              )}
+              {profile?.womens_team_flair && (
+                  <span className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.womens_team_flair))}>
+                      W: {profile.womens_team_flair}
+                  </span>
+              )}
+            </div>
+            {/* FIX 2: Legacy team_flair_id badge block was removed from here! */}
 
             {/* Fantasy Stats */}
             {!lbLoading && (
@@ -161,28 +186,41 @@ export function UserProfile() {
             <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-2 ml-1">Visible on global leaderboards.</p>
           </div>
 
-          <div>
-            <label className="block text-xs font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-              Team Flair
-            </label>
-            <select
-              value={flair}
-              onChange={(e) => setFlair(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-xl px-5 py-4 text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none"
-              required
-            >
-              <option value="" disabled>Select a Club...</option>
-              {allTeams.map((t) => (
-                <option key={t.id} value={t.name} className="bg-zinc-900">
-                  {t.name} ({t.division === 'womens' ? "Women's" : "Men's"})
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
+                Men's Team Flair
+              </label>
+              <select
+                value={mensFlair}
+                onChange={(e) => setMensFlair(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                required
+              >
+                <option value="" disabled>Select Club...</option>
+                {mensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
+                Women's Team Flair
+              </label>
+              <select
+                value={womensFlair}
+                onChange={(e) => setWomensFlair(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-white/40 transition-colors appearance-none cursor-pointer"
+                required
+              >
+                <option value="" disabled>Select Club...</option>
+                {womensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <button
             type="submit"
-            disabled={saving || !nickname || !flair || !hasChanges}
+            disabled={saving || !nickname || !mensFlair || !womensFlair || !hasChanges}
             className="w-full group h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
           >
             {saving ? "Saving..." : hasChanges ? "Save Changes" : "No Changes"}

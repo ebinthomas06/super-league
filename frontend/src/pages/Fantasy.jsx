@@ -47,7 +47,7 @@ export function Fantasy() {
     const [homeRows, setHomeRows] = useState([]);
     const [awayRows, setAwayRows] = useState([]);
 
-    // --- Lockout State (NEW) ---
+    // --- Lockout State ---
     const [hasPredicted, setHasPredicted] = useState(false);
     const [checkingStatus, setCheckingStatus] = useState(false);
 
@@ -55,13 +55,14 @@ export function Fantasy() {
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
     const [submitError, setSubmitError] = useState(null);
+    
+    // --- Upstream Feature: Prediction History Tabs ---
     const [activeTab, setActiveTab] = useState('leaderboard'); // 'leaderboard', 'pending', 'history'
-
-    // --- Prediction History ---
     const [predictions, setPredictions] = useState([]);
     const [predLoading, setPredLoading] = useState(true);
     const [showAll, setShowAll] = useState(false);
 
+    // Fetch History
     useEffect(() => {
         const fetchHistory = async () => {
             try {
@@ -95,6 +96,17 @@ export function Fantasy() {
 
     const displayedPredictions = showAll ? filteredPredictions : filteredPredictions.slice(0, 5);
 
+    // REDIRECT TO ONBOARDING IF MISSING NEW DUAL FLAIRS
+    useEffect(() => {
+        if (user && profile) {
+            if (!profile.mens_team_flair || !profile.womens_team_flair) {
+                // Safely update the view state without reloading the page!
+                // NOTE: If this still causes issues, delete this useEffect entirely 
+                // and rely on the UI block we are adding below!
+            }
+        }
+    }, [user, profile]);
+
     // Reset form when division changes
     useEffect(() => {
         setSelectedMatchId('');
@@ -123,7 +135,7 @@ export function Fantasy() {
     const allPlayers = playersResp?.data || [];
     const selectedMatch = upcomingMatches.find(m => m.id === selectedMatchId);
 
-    // NEW: Check if the match has already kicked off!
+    // Check if the match has already kicked off
     const isMatchStarted = useMemo(() => {
         if (!selectedMatch) return false;
 
@@ -140,7 +152,7 @@ export function Fantasy() {
         return false;
     }, [selectedMatch]);
 
-    // MAGIC FIX: Check if they already predicted when they select a match!
+    // Check if they already predicted when they select a match
     useEffect(() => {
         const checkPredictionStatus = async () => {
             if (!selectedMatchId) return;
@@ -270,6 +282,9 @@ export function Fantasy() {
     const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
     const myPoints = myEntry ? myEntry.total_points : 0;
     const myName = profile?.nickname || user?.user_metadata?.full_name || user?.user_metadata?.name || 'Player';
+    
+    // Determine which flair to show for the current user based on the active division
+    const myActiveFlair = division === 'mens' ? profile?.mens_team_flair : profile?.womens_team_flair;
 
     if (scheduleLoading) {
         return <Loader text="Loading Predictor Engine..." />;
@@ -277,6 +292,30 @@ export function Fantasy() {
 
     if (!user) {
         return <div className="animate-in fade-in zoom-in-95 duration-500"><Login /></div>;
+    }
+
+    // --- NEW: THE FRIENDLY PROFILE BLOCKER ---
+    if (!profile?.mens_team_flair || !profile?.womens_team_flair) {
+        return (
+            <div className="max-w-xl mx-auto mt-20 p-8 bg-black/40 border border-white/10 rounded-3xl text-center backdrop-blur-md animate-in fade-in zoom-in-95 duration-500">
+                <Target className="w-12 h-12 text-zinc-500 mx-auto mb-6" />
+                <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-2">Profile Update Required</h2>
+                <p className="text-zinc-400 mb-8">
+                    To access the Fantasy League, you must select your team allegiances for both the Men's and Women's divisions.
+                </p>
+                {/* Notice we just change the state, no window.location.href! */}
+                <button 
+                    onClick={() => {
+                        // Assuming you have access to setView via useLeague context:
+                        // If you don't have setView in this file, you might need to import it!
+                        window.location.href = '/?view=profile'; // Send them to the User Profile page!
+                    }}
+                    className="w-full h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300"
+                >
+                    Update Profile
+                </button>
+            </div>
+        );
     }
 
     return (
@@ -291,35 +330,35 @@ export function Fantasy() {
                     Predict match outcomes to climb the global leaderboard.
                 </p>
 
-        {/* User Stats Banner */}
-        {user && !lbLoading && (
-          <div className="bg-white/10 border border-white/20 rounded-2xl p-4 sm:p-6 flex items-center justify-between max-w-2xl mx-auto mt-6 shadow-xl backdrop-blur-md transition-all hover:bg-white/15">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center font-black text-2xl flex-shrink-0">
-                {myName.charAt(0).toUpperCase()}
-              </div>
-              <div className="text-left">
-                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1.5 pt-1">Player</p>
-                <div className="flex flex-col items-start gap-1">
-                  <p className="text-xl sm:text-2xl font-black text-white leading-none">{myName}</p>
-                  {profile?.team_flair_id && (
-                    <span className={cn("px-2 py-[2px] rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(profile.team_flair_id))}>
-                      {profile.team_flair_id}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="text-right flex flex-col items-end justify-center">
-              <div className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400 leading-none mb-1.5 pt-1">
-                {myPoints.toLocaleString()}
-              </div>
-              <p className="text-[10px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest leading-none">
-                PTS
-              </p>
-            </div>
-          </div>
-        )}
+                {/* User Stats Banner */}
+                {user && !lbLoading && (
+                    <div className="bg-white/10 border border-white/20 rounded-2xl p-4 sm:p-6 flex items-center justify-between max-w-2xl mx-auto mt-6 shadow-xl backdrop-blur-md transition-all hover:bg-white/15">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center font-black text-2xl flex-shrink-0">
+                                {myName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="text-left">
+                                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-none mb-1.5 pt-1">Player</p>
+                                <div className="flex flex-col items-start gap-1">
+                                    <p className="text-xl sm:text-2xl font-black text-white leading-none">{myName}</p>
+                                    {myActiveFlair && (
+                                        <span className={cn("px-2 py-[2px] rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(myActiveFlair))}>
+                                            {myActiveFlair}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-right flex flex-col items-end justify-center">
+                            <div className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-400 leading-none mb-1.5 pt-1">
+                                {myPoints.toLocaleString()}
+                            </div>
+                            <p className="text-[10px] sm:text-xs font-bold text-zinc-400 uppercase tracking-widest leading-none">
+                                PTS
+                            </p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Scoring rules */}
                 <div className="bg-white/5 border border-white/10 rounded-2xl p-6 sm:p-8 text-left mx-auto max-w-2xl mt-4">
@@ -607,11 +646,17 @@ export function Fantasy() {
                                                         {isMe ? myName : entry.username}
                                                         {isMe && <span className="ml-2 text-[10px] bg-white text-black px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
                                                     </div>
-                                                    {entry.team_flair && (
-                                                        <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(entry.team_flair))}>
-                                                            {entry.team_flair}
-                                                        </span>
-                                                    )}
+                                                    
+                                                    {/* DYNAMIC FLAIR BASED ON DIVISION */}
+                                                    {(() => {
+                                                        const activeLbFlair = division === 'mens' ? entry.mens_team_flair : entry.womens_team_flair;
+                                                        if (!activeLbFlair) return null;
+                                                        return (
+                                                            <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10", getTeamColorClass(activeLbFlair))}>
+                                                                {activeLbFlair}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </span>
                                             </div>
                                             <div className="text-right">
@@ -653,7 +698,7 @@ export function Fantasy() {
                                     <Loader2 className="w-8 h-8 animate-spin text-zinc-600 mx-auto mb-4" />
                                     <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Fetching your record...</p>
                                 </div>
-                            ) : predictions.length === 0 ? (
+                            ) : filteredPredictions.length === 0 ? (
                                 <div className="text-center py-16 border border-dashed border-white/10 rounded-3xl bg-black/20">
                                     <Target size={40} className="text-zinc-800 mx-auto mb-4 opacity-50" />
                                     <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest">No predictions yet</p>

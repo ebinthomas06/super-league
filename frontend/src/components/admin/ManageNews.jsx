@@ -70,8 +70,7 @@ export default function ManageNews() {
           summary: form.summary, 
           category: form.category,
           image_url: finalHeroUrl, 
-          content: processedBlocks,
-          category: form.category 
+          content: processedBlocks
         })
       });
 
