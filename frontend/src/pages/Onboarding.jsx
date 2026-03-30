@@ -34,15 +34,18 @@ export function Onboarding() {
     setError(null);
 
     const updatedProfile = {
+      id: user.id,
+      email: user.email, // <--- ADD THIS LINE!
       nickname: nickname.trim(),
       mens_team_flair: mensFlair,
       womens_team_flair: womensFlair,
+      team_flair_id: mensFlair 
     };
 
+    // 1. USE UPSERT: This guarantees it saves
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update(updatedProfile)
-      .eq('id', user.id);
+      .upsert(updatedProfile);
 
     if (updateError) {
       console.error("Profile saving error:", updateError.message);
@@ -51,8 +54,11 @@ export function Onboarding() {
       return;
     }
 
+    // 2. Update local state
     setProfile({ id: user.id, email: user.email, ...updatedProfile });
-    setSaving(false);
+    
+    // 3. THE URL RESCUE: Force them out of the ?view=onboarding URL!
+    window.location.href = '/'; 
   };
 
   return (
