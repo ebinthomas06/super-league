@@ -75,7 +75,7 @@ export function Home() {
         <div className="space-y-12 animate-in fade-in duration-500 pb-12 overflow-x-hidden">
 
             {match ? (
-                <GlassPanel 
+                <GlassPanel
                     className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 animate-fade-up opacity-0 stagger-1 cursor-pointer hover:bg-white/5 transition-colors group"
                     onClick={() => setView('matches')}
                 >
@@ -152,7 +152,7 @@ export function Home() {
                     </div>
                 </GlassPanel>
             ) : (
-                <GlassPanel 
+                <GlassPanel
                     className="p-12 relative overflow-hidden border border-white/10 animate-fade-up flex justify-center items-center cursor-pointer hover:bg-white/5 transition-colors group"
                     onClick={() => setView('matches')}
                 >
@@ -291,12 +291,12 @@ export function Home() {
                                         {idx + 1}
                                     </div>
                                     <div className="flex flex-col items-start leading-tight min-w-0">
-                                      <span className="font-bold text-md text-white uppercase tracking-wider truncate">{user.name}</span>
-                                      {user.team_flair && (
-                                        <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10 shrink-0 inline-block", getTeamColorClass(user.team_flair))}>
-                                          {user.team_flair}
-                                        </span>
-                                      )}
+                                        <span className="font-bold text-md text-white uppercase tracking-wider truncate">{user.name}</span>
+                                        {user.mens_team_flair && (
+                                            <span className={cn("px-2 py-[2px] mt-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-sm border border-white/10 shrink-0 inline-block", getTeamColorClass(division === 'mens' ? user.mens_team_flair : user.womens_team_flair))}>
+                                                {division === 'mens' ? user.mens_team_flair : user.womens_team_flair}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
