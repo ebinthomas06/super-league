@@ -24,9 +24,8 @@ const routes = ['matches', 'standings', 'clubs', 'statistics', 'legends', 'rules
         console.log(`📸 Snapping ${url}...`);
 
         await page.goto(url, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(2000); // Wait 2s for UI animations to settle
+        await page.waitForTimeout(2000);
 
-        // Saves as strictly lowercase (e.g., matches.png)
         await page.screenshot({ path: `./screenshots/${route}.png` });
     }
 
