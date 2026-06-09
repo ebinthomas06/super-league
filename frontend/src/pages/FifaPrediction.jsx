@@ -412,14 +412,22 @@ export function FifaPrediction() {
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/leaderboard`);
         const json = await res.json();
-        if (json.success) setLeaderboard(json.data);
+        
+        if (json.success) {
+          // Filter out anyone who doesn't have a World Cup flair set
+          const filteredLeaderboard = json.data.filter(
+            player => player.user_profiles && player.user_profiles.wc_team_flair
+          );
+          
+          setLeaderboard(filteredLeaderboard);
+        }
       } catch (err) {
         console.error("Leaderboard fetch failed", err);
       }
     }
     fetchLeaderboard();
   }, []);
-
+  
   const [portalTarget, setPortalTarget] = useState(null);
   useEffect(() => {
     setPortalTarget(document.getElementById('navbar-portal-target'));
