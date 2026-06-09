@@ -15,7 +15,7 @@ export function TopNavbar() {
         { id: 'matches', label: 'Matches' },
         { id: 'standings', label: 'Standings' },
         { id: 'teams', label: 'Clubs' },
-        { id: 'fantasy', label: 'Fantasy' },
+        //{ id: 'fantasy', label: 'Fantasy' },
         { id: 'leaderboard', label: 'Statistics' },
         { id: 'vault', label: 'Newsletter' },
         { id: 'legends', label: 'Legends' },
