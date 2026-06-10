@@ -1,76 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { useLeague } from '../context/LeagueContext';
-import { ArrowLeft, Calendar, Newspaper, Share2, Check, Loader2 } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Calendar, Newspaper, Share2, Check } from 'lucide-react';
 import { Loader } from '../components/Loader';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export function ArticleView() {
-  const { selectedArticle, setSelectedArticle, setView } = useLeague();
+  const { id } = useParams(); // Grab the ID directly from the URL
+  const navigate = useNavigate();
+  const [article, setArticle] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // 1. FIX: Automatically set loading to TRUE if we only have an ID
-  const needsFetch = !!(selectedArticle?.id && !selectedArticle?.title && !selectedArticle?.headline);
-  const [loading, setLoading] = useState(needsFetch);
-
-  // 2. FETCH FULL DATA IF SHARED VIA LINK
-  // 2. FETCH FULL DATA IF SHARED VIA LINK
+  // Fetch the specific article when the ID changes
   useEffect(() => {
-    if (needsFetch) {
-      setLoading(true);
-      
-      // FIX: Fetch all news and quickly filter for the correct ID to avoid the 404!
-      fetch(`${API_URL}/news`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data) {
-            // Find the exact article from the master list
-            const foundArticle = data.data.find(a => a.id === selectedArticle.id);
-            
-            if (foundArticle) {
-              setSelectedArticle(foundArticle);
-            } else {
-              setSelectedArticle(null); // Clear if ID genuinely doesn't exist
-            }
-          } else {
-            setSelectedArticle(null);
-          }
-        })
-        .catch(err => {
-          console.error("Failed to load shared article", err);
-          setSelectedArticle(null);
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [selectedArticle?.id, needsFetch, setSelectedArticle]);
-  
-  // 3. SHARE HANDLER
+    if (!id) return;
+    
+    setLoading(true);
+    fetch(`${API_URL}/news`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data) {
+          const foundArticle = data.data.find(a => a.id === id);
+          setArticle(foundArticle || null);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load article", err);
+        setArticle(null);
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
+
   const handleShare = () => {
-    if (!selectedArticle?.id) return;
-    const shareLink = `${window.location.origin}/?article=${selectedArticle.id}`;
+    if (!id) return;
+    const shareLink = `${window.location.origin}/article/${id}`;
     navigator.clipboard.writeText(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 4. SHOW LOADER WHILE FETCHING
   if (loading) {
     return <Loader text="Loading Article..." />;
   }
 
-  // 5. FIXED FAILSAFE: Only kick them out if we finished loading and STILL have no title
-  if (!selectedArticle || (!selectedArticle.title && !selectedArticle.headline)) {
-    setView('vault');
-    return null;
+  if (!article) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-zinc-500 space-y-4">
+        <p className="text-lg">Article not found.</p>
+        <button onClick={() => navigate('/vault')} className="text-[#E8C881] hover:underline font-bold">Back to Newsletter</button>
+      </div>
+    );
   }
 
-  // SAFELY EXTRACT FIELDS
-  const title = selectedArticle.title || selectedArticle.headline || 'Untitled Article';
-  const summary = selectedArticle.summary || selectedArticle.snippet || '';
-  const imageUrl = selectedArticle.image_url || selectedArticle.imgUrl;
-  const date = selectedArticle.date || new Date().toISOString();
-  const author = selectedArticle.author || 'Super League Media';
-  const category = selectedArticle.category || 'Official Editorial';
+  // Safely extract fields
+  const title = article.title || article.headline || 'Untitled Article';
+  const summary = article.summary || article.snippet || '';
+  const imageUrl = article.image_url || article.imgUrl;
+  const date = article.date || new Date().toISOString();
+  const author = article.author || 'Super League Media';
+  const category = article.category || 'Official Editorial';
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -78,10 +67,7 @@ export function ArticleView() {
       {/* Top Navigation */}
       <div className="flex items-center justify-between mb-6">
         <button 
-          onClick={() => {
-            setSelectedArticle(null); // Safely clear memory before going back!
-            setView('vault');
-          }}
+          onClick={() => navigate('/vault')}
           className="group flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
         >
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -112,7 +98,6 @@ export function ArticleView() {
       {/* Article Content */}
       <div className="max-w-3xl mx-auto px-2 sm:px-6">
         
-        {/* Headline & Metadata */}
         <div className="mb-8 border-b border-white/10 pb-8 space-y-6">
           <div className="flex items-center gap-4">
             <span className="px-3 py-1 bg-white border border-white/20 text-black text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-full">
@@ -139,14 +124,11 @@ export function ArticleView() {
           </div>
         </div>
 
-        {/* THE DYNAMIC CONTENT VIEWER */}
         <div className="prose prose-invert prose-lg max-w-none font-serif text-zinc-300">
-          
           {summary && <p className="text-xl font-medium text-[#E8C881] leading-relaxed mb-8">{summary}</p>}
 
-          {/* CHECK 1: Is it the new JSON Array from the Admin Panel? */}
-          {Array.isArray(selectedArticle.content) && selectedArticle.content.length > 0 ? (
-            selectedArticle.content.map((block, i) => {
+          {Array.isArray(article.content) && article.content.length > 0 ? (
+            article.content.map((block, i) => {
               if (block.type === 'paragraph') return <p key={i} className="mb-6 leading-relaxed">{block.value}</p>;
               
               if (block.type === 'image') return (
@@ -165,22 +147,15 @@ export function ArticleView() {
               
               return null;
             })
-          ) : 
-          
-          /* CHECK 2: Is it an old legacy string? */
-          typeof selectedArticle.content === 'string' && selectedArticle.content.trim() !== '' ? (
-            selectedArticle.content.split('\n').map((paragraph, i) => (
+          ) : typeof article.content === 'string' && article.content.trim() !== '' ? (
+            article.content.split('\n').map((paragraph, i) => (
               paragraph.trim() ? <p key={i} className="mb-6 leading-relaxed">{paragraph}</p> : null
             ))
           ) : (
-            
-          /* FALLBACK: If no content exists at all */
             <p className="italic text-zinc-500">No additional content available.</p>
           )}
-          
         </div>
       </div>
-
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { NewsArticle } from '../components/NewsArticle';
 import { Loader2 } from 'lucide-react';
 import { Loader } from '../components/Loader';
+import { Link } from 'react-router-dom'; // 1. IMPORT LINK HERE!
 
 export function Vault() {
   const { division } = useLeague();
@@ -52,9 +53,15 @@ export function Vault() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Use newsList here! */}
+        {/* 4. WRAP THE COMPONENT IN A LINK! */}
         {newsList.map(article => (
-          <NewsArticle key={article.id} article={article} />
+          <Link 
+            key={article.id} 
+            to={`/article/${article.id}`} 
+            className="block hover:scale-[1.02] transition-transform duration-300"
+          >
+            <NewsArticle article={article} />
+          </Link>
         ))}
         
         {/* Fallback if the category is empty */}

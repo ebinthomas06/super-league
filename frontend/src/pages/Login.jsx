@@ -1,10 +1,37 @@
+import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { GlassPanel } from '../components/GlassPanel';
 import { LogIn } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export function Login() {
-  const { signInWithGoogle, loading } = useAuth();
+  const { signInWithGoogle, loading, user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
+  // 1. Grab the intended destination (defaults to "/")
+  const from = location.state?.from?.pathname || "/";
+
+  // 2. Save the destination to sessionStorage BEFORE they leave for Google
+  useEffect(() => {
+    if (from !== "/") {
+      sessionStorage.setItem('authRedirect', from);
+    }
+  }, [from]);
+
+  // 3. When the user comes back and is authenticated, send them to the saved route
+  useEffect(() => {
+    if (user) {
+      // Check if we have a saved destination, otherwise go to home
+      const finalDestination = sessionStorage.getItem('authRedirect') || "/";
+      
+      // Clean up the storage so it doesn't mess with future logins
+      sessionStorage.removeItem('authRedirect'); 
+      
+      navigate(finalDestination, { replace: true });
+    }
+  }, [user, navigate]);
+  
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background aesthetics */}
