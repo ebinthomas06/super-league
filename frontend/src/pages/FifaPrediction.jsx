@@ -4,9 +4,47 @@ import { createPortal } from 'react-dom';
 import { AutocompleteInput } from '../components/AutocompleteInput';
 import './FifaPrediction.css';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 export function FifaPrediction() {
   const { user, profile, signInWithGoogle } = useAuth();
+  const navigate = useNavigate();
+
+  if (!user) {
+    return (
+      <div className="fifa-prediction-page flex items-center justify-center min-h-[80vh] text-center p-6">
+        <div className="bg-black/60 border border-white/10 rounded-2xl p-10 max-w-md backdrop-blur-md shadow-2xl">
+           <h2 className="text-3xl font-fifa-italic text-white mb-4">ACCESS REQUIRED</h2>
+           <p className="text-zinc-400 mb-8 font-medium">You must be signed in to access the FIFA Fantasy League and submit predictions.</p>
+           <button 
+             onClick={signInWithGoogle} 
+             className="w-full bg-[var(--fifa-cyan)] text-black px-8 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-white transition-colors"
+           >
+             Sign in with Google
+           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Guard 2: Logged in, but missing World Cup Flair
+  if (user && !profile?.wc_team_flair) {
+    return (
+      <div className="fifa-prediction-page flex items-center justify-center min-h-[80vh] text-center p-6">
+        <div className="bg-black/60 border border-white/10 rounded-2xl p-10 max-w-md backdrop-blur-md shadow-2xl">
+           <h2 className="text-3xl font-fifa-italic text-[var(--fifa-gold)] mb-4">TEAM FLAIR MISSING</h2>
+           <p className="text-zinc-400 mb-8 font-medium">You need to select your World Cup team flair in your profile before entering the arena.</p>
+           <button 
+             onClick={() => navigate('/profile')} 
+             className="w-full bg-[var(--fifa-gold)] text-black px-8 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-white transition-colors"
+           >
+             Go to Profile
+           </button>
+        </div>
+      </div>
+    );
+  }
+
   const [flagAnimationEnabled, setFlagAnimationEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem('flagAnimationEnabled');

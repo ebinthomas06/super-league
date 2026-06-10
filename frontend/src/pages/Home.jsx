@@ -5,6 +5,7 @@ import { FormGuide } from '../components/FormGuide';
 import { NewsArticle } from '../components/NewsArticle';
 import { ChevronRight, Trophy, Goal, Zap, Loader2, Calendar } from 'lucide-react';
 import { Loader } from '../components/Loader';
+import { Link, useNavigate } from 'react-router-dom'; // <-- IMPORT LINK and useNavigate HERE
 import './DashboardGrid.css';
 import teamStyles from './Teams.module.css';
 import { cn } from '../utils/cn';
@@ -50,6 +51,7 @@ function SectionHeader({ title, action, onAction }) {
 export function Home() {
     const { division, setView } = useLeague();
     const { data: apiResponse, loading, error } = useApi('/home/dashboard');
+    const navigate = useNavigate(); // <-- ADD useNavigate hook
 
     if (loading) {
         return <Loader variant="spinner" fullScreen text="Aggregating Live Data..." />;
@@ -77,7 +79,7 @@ export function Home() {
             {match ? (
                 <GlassPanel
                     className="p-8 sm:p-12 md:p-20 relative overflow-hidden border border-white/20 animate-fade-up opacity-0 stagger-1 cursor-pointer hover:bg-white/5 transition-colors group"
-                    onClick={() => setView('matches')}
+                    onClick={() => navigate('/matches')} // <-- UPDATE TO navigate
                 >
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-white/5 blur-[120px] rounded-full pointer-events-none mix-blend-screen" />
 
@@ -154,7 +156,7 @@ export function Home() {
             ) : (
                 <GlassPanel
                     className="p-12 relative overflow-hidden border border-white/10 animate-fade-up flex justify-center items-center cursor-pointer hover:bg-white/5 transition-colors group"
-                    onClick={() => setView('matches')}
+                    onClick={() => navigate('/matches')} // <-- UPDATE TO navigate
                 >
                     <span className="text-sm font-black tracking-[0.3em] uppercase text-zinc-500 group-hover:text-zinc-400 transition-colors">No Fixtures Currently Scheduled</span>
                 </GlassPanel>
@@ -166,11 +168,11 @@ export function Home() {
                     <SectionHeader
                         title={division === 'womens' ? "Road to Final" : "Top 4 Standings"}
                         action={division === 'womens' ? "Full Bracket" : "Full Table"}
-                        onAction={() => setView('standings')}
+                        onAction={() => navigate('/standings')} // <-- UPDATE TO navigate
                     />
                     <GlassPanel className="overflow-hidden relative h-fit">
                         {division === 'womens' ? (
-                            <div className="p-6 sm:p-10 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden" onClick={() => setView('standings')}>
+                            <div className="p-6 sm:p-10 flex flex-col justify-center relative group cursor-pointer hover:bg-white/5 transition-colors overflow-hidden" onClick={() => navigate('/standings')}>
                                 <Trophy className="absolute right-[-20px] bottom-[-20px] w-64 h-64 text-white/[0.03] -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
                                 <h4 className="text-sm font-black text-zinc-500 tracking-widest uppercase mb-6 relative z-10">Final Result &bull; WSL</h4>
                                 <div className="space-y-4 relative z-10 w-full max-w-sm">
@@ -196,7 +198,7 @@ export function Home() {
                                     </div>
                                     <div className="flex flex-col">
                                         {top4.map((team, idx) => (
-                                            <div key={team.teamId} className={`grid grid-cols-[3rem_minmax(120px,1fr)_3rem_3rem] gap-2 p-4 sm:p-5 items-center ${idx !== top4.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/10 transition-colors cursor-pointer`} onClick={() => setView('standings')}>
+                                            <div key={team.teamId} className={`grid grid-cols-[3rem_minmax(120px,1fr)_3rem_3rem] gap-2 p-4 sm:p-5 items-center ${idx !== top4.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/10 transition-colors cursor-pointer`} onClick={() => navigate('/standings')}>
                                                 <div className="font-mono text-base sm:text-lg font-black text-center text-zinc-400">{team.rank}</div>
                                                 <div className="font-black text-sm sm:text-lg tracking-tight text-white uppercase flex items-center gap-2 min-w-0 pr-2">
                                                     {team.logoUrl && <img src={team.logoUrl} className="w-5 h-5 sm:w-6 sm:h-6 object-contain shrink-0" alt={team.teamName} />}
@@ -220,11 +222,18 @@ export function Home() {
                     <SectionHeader
                         title="The Onion Drops"
                         action="The Vault"
-                        onAction={() => setView('vault')}
+                        onAction={() => navigate('/vault')} // <-- UPDATE TO navigate
                     />
                     <div className="news-grid">
                         {newsItems.map((article, idx) => (
-                            <NewsArticle key={article.id || idx} article={article} />
+                            // <-- WRAPPED IN A LINK COMPONENT HERE
+                            <Link 
+                                key={article.id || idx} 
+                                to={`/article/${article.id}`}
+                                className="block hover:scale-[1.02] transition-transform duration-300"
+                            >
+                                <NewsArticle article={article} />
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -232,14 +241,17 @@ export function Home() {
                     <SectionHeader
                         title="Player Leaders"
                         action="All Players"
-                        onAction={() => setView('leaderboard')}
+                        onAction={() => navigate('/leaderboard')} // <-- UPDATE TO navigate
                     />
                     <div className="flex flex-col gap-4">
                         {topScorer && (
                             <GlassPanel className="p-6 relative overflow-hidden group min-w-0 cursor-pointer hover:bg-white/5 transition-colors" onClick={() => {
                                 if (topScorer.playerId) {
                                     sessionStorage.setItem('selectedPlayer', JSON.stringify({ id: topScorer.playerId }));
-                                    setView('player-profile');
+                                    // Notice: Currently you don't have a specific route mapped for the player profile modal. 
+                                    // You'll need to handle this based on how you implement player modals in React Router!
+                                    // For now, I'm leaving setView so it doesn't break, but ideally you'd use query params or a modal route.
+                                    setView('player-profile'); 
                                 }
                             }}>
                                 <Goal className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 -rotate-12 group-hover:scale-110 transition-transform duration-700 pointer-events-none animate-float" />
@@ -281,7 +293,7 @@ export function Home() {
                     <SectionHeader
                         title="Fantasy Snapshot"
                         action="Play Predictor"
-                        onAction={() => setView('fantasy')}
+                        onAction={() => navigate('/fantasy')} // <-- UPDATE TO navigate
                     />
                     <GlassPanel className="p-2 overflow-hidden h-fit flex flex-col justify-center">
                         {fantasyTop.map((user, idx) => (
@@ -308,7 +320,7 @@ export function Home() {
                         <div
                             className="text-center p-3 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-white cursor-pointer transition-colors mt-2"
                             onClick={() => {
-                                setView('fantasy');
+                                navigate('/fantasy');
                                 setTimeout(() => document.getElementById('leaderboard')?.scrollIntoView({ behavior: 'smooth' }), 100);
                             }}
                         >

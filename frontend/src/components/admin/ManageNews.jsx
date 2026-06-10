@@ -28,16 +28,51 @@ export default function ManageNews() {
     setContentBlocks(blocks => blocks.filter(b => b.id !== id));
   };
 
-  // Helper to upload a single file to Supabase
+  // --- NEW R2 UPLOAD LOGIC ---
   const uploadImage = async (file) => {
     if (!file) return null;
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const { error } = await supabase.storage.from('news-images').upload(fileName, file);
-    if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('news-images').getPublicUrl(fileName);
-    return publicUrl;
+
+    try {
+      // Grab the user session to prove to the backend we are an admin
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // 1. Ask the backend for a secure Cloudflare R2 upload ticket
+      const urlRes = await fetch(`${API_URL}/admin/newsletter/upload-url`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}` 
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type
+        })
+      });
+
+      const { signedUrl, publicUrl } = await urlRes.json();
+
+      if (!signedUrl) throw new Error("Failed to get R2 upload URL");
+
+      // 2. Upload the file DIRECTLY to Cloudflare R2
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadRes.ok) throw new Error("Failed to upload image to Cloudflare");
+
+      // 3. Return the final, public CDN link
+      return publicUrl;
+      
+    } catch (error) {
+      console.error("R2 Upload Error:", error);
+      throw error;
+    }
   };
+  // ---------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,10 +80,10 @@ export default function ManageNews() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      // 1. Upload Hero Image
+      // 1. Upload Hero Image (Now goes to R2!)
       let finalHeroUrl = await uploadImage(heroImageFile);
 
-      // 2. Upload any images embedded inside the content blocks!
+      // 2. Upload any images embedded inside the content blocks! (Now goes to R2!)
       const processedBlocks = await Promise.all(contentBlocks.map(async (block) => {
         if (block.type === 'image' && block.file) {
           const blockImageUrl = await uploadImage(block.file);
@@ -120,17 +155,6 @@ export default function ManageNews() {
           <div className="space-y-4">
             <input type="text" placeholder="Headline / Title" required value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 outline-none focus:border-[#E8C881]/50 text-xl font-black text-white" />
             <textarea placeholder="Short Summary (Subtitle)" required value={form.summary} onChange={e => setForm({...form, summary: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-[#E8C881]/50 text-sm text-zinc-300 h-20 resize-none" />
-            {/* ADD THIS CATEGORY DROPDOWN */}
-            <select 
-              value={form.category} 
-              onChange={e => setForm({...form, category: e.target.value})} 
-              className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 outline-none focus:border-[#E8C881]/50 text-sm font-bold text-white cursor-pointer"
-            >
-              <option value="Latest News">Latest News</option>
-              <option value="Match Reports">Match Reports</option>
-              <option value="Satire">Satire</option>
-              <option value="Features">Features</option>
-            </select>
             <div className="bg-black/50 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
               <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest min-w-[100px]">Category</span>
               <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-transparent outline-none text-sm text-zinc-300 cursor-pointer [&>option]:bg-zinc-900 [&>option]:text-white">

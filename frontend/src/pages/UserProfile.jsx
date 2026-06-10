@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useLeague } from '../context/LeagueContext';
+import { useNavigate } from 'react-router-dom'; // IMPORT NAVIGATE
 import { useApi } from '../hooks/useApi';
 import { supabase } from '../lib/supabase';
 import { GlassPanel } from '../components/GlassPanel';
@@ -29,19 +29,18 @@ const getTeamColorClass = (teamName) => {
 
 export function UserProfile() {
     const { user, profile, setProfile, signOut } = useAuth();
-    const { setView } = useLeague();
+    const navigate = useNavigate(); // USE NAVIGATE
     const { data: lbResp, loading: lbLoading } = useApi('/predictions/leaderboard');
 
-    // Compute fantasy rank and points safely
     const leaderboard = lbResp?.data?.overall || [];
     const myEntry = leaderboard.find(entry => entry.user_id === user?.id);
     const myPoints = myEntry ? myEntry.total_points : 0;
     const myRank = myEntry ? leaderboard.findIndex(e => e.user_id === user?.id) + 1 : null;
 
-    // Initialize state with fallbacks to prevent undefined errors
     const [nickname, setNickname] = useState(profile?.nickname || '');
     const [mensFlair, setMensFlair] = useState(profile?.mens_team_flair || '');
     const [womensFlair, setWomensFlair] = useState(profile?.womens_team_flair || '');
+    const [wcFlair, setWcFlair] = useState(profile?.wc_team_flair || ''); // NEW WC FLAIR STATE
 
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState(false);
@@ -49,13 +48,28 @@ export function UserProfile() {
 
     const [mensTeams, setMensTeams] = useState([]);
     const [womensTeams, setWomensTeams] = useState([]);
+    const [wcTeams, setWcTeams] = useState([]); // NEW WC TEAMS LIST
 
     useEffect(() => {
         const fetchAllTeams = async () => {
-            const { data } = await supabase.from('teams').select('*').order('name');
-            if (data) {
-                setMensTeams(data.filter(t => t.division === 'mens'));
-                setWomensTeams(data.filter(t => t.division === 'womens'));
+            // Fetch League Teams
+            const { data: leagueData } = await supabase.from('teams').select('*').order('name');
+            if (leagueData) {
+                setMensTeams(leagueData.filter(t => t.division === 'mens'));
+                setWomensTeams(leagueData.filter(t => t.division === 'womens'));
+            }
+
+            // Fetch World Cup Teams (Assuming they are in 'wc_teams' table or similar from your API)
+            try {
+               const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/teams`);
+               const json = await res.json();
+               if (json.success && json.data) {
+                 // Sort them alphabetically for the dropdown
+                 const sortedWcTeams = json.data.sort((a, b) => a.name.localeCompare(b.name));
+                 setWcTeams(sortedWcTeams);
+               }
+            } catch (err) {
+               console.error("Failed to fetch WC teams for profile", err);
             }
         };
         fetchAllTeams();
@@ -63,7 +77,8 @@ export function UserProfile() {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!nickname.trim() || !mensFlair || !womensFlair) return;
+        // Require WC flair now too!
+        if (!nickname.trim() || !mensFlair || !womensFlair || !wcFlair) return;
 
         setSaving(true);
         setError(null);
@@ -73,6 +88,7 @@ export function UserProfile() {
             nickname: nickname.trim(),
             mens_team_flair: mensFlair,
             womens_team_flair: womensFlair,
+            wc_team_flair: wcFlair, // SAVE WC FLAIR
         };
 
         const { error: updateError } = await supabase
@@ -91,17 +107,15 @@ export function UserProfile() {
         setSaving(false);
         setSuccess(true);
 
-        // Hide success message after 3 seconds
         setTimeout(() => setSuccess(false), 3000);
     };
 
-    // FIX 1: Safely compare state to profile values (accounting for nulls)
     const hasChanges =
         nickname !== (profile?.nickname || '') ||
         mensFlair !== (profile?.mens_team_flair || '') ||
-        womensFlair !== (profile?.womens_team_flair || '');
+        womensFlair !== (profile?.womens_team_flair || '') ||
+        wcFlair !== (profile?.wc_team_flair || ''); // CHECK FOR WC CHANGES
 
-    // FIX 3: Safety catch to prevent crashes if user data isn't loaded yet
     if (!user) return null;
 
     return (
@@ -121,7 +135,7 @@ export function UserProfile() {
                         <span className="text-2xl font-black text-white">{profile?.nickname || 'Unknown'}</span>
                     </div>
 
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex flex-wrap justify-center gap-2 mt-3">
                         {profile?.mens_team_flair && (
                             <span className={cn("px-3 py-1 rounded-full text-[10px] text-white font-bold leading-none tracking-wide shadow-custom border border-white/10", getTeamColorClass(profile.mens_team_flair))}>
                                 {profile.mens_team_flair}
@@ -132,10 +146,14 @@ export function UserProfile() {
                                 {profile.womens_team_flair}
                             </span>
                         )}
+                        {/* Display WC Flair Badge */}
+                        {profile?.wc_team_flair && (
+                            <span className="px-3 py-1 rounded-full text-[10px] text-black bg-[var(--fifa-gold)] font-black leading-none tracking-wide shadow-custom border border-white/10 uppercase">
+                                {profile.wc_team_flair}
+                            </span>
+                        )}
                     </div>
-                    {/* FIX 2: Legacy team_flair_id badge block was removed from here! */}
 
-                    {/* Fantasy Stats */}
                     {!lbLoading && (
                         <div className="flex items-center gap-4 mt-6 w-full max-w-xs">
                             <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-4 text-center">
@@ -186,10 +204,11 @@ export function UserProfile() {
                         <p className="text-[10px] text-zinc-600 uppercase tracking-wider mt-2 ml-1">Visible on global leaderboards.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Team Flair Grid - Now 3 Columns on large screens */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                                Men's Team Flair
+                                Men's Club
                             </label>
                             <select
                                 value={mensFlair}
@@ -204,7 +223,7 @@ export function UserProfile() {
 
                         <div>
                             <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                                Women's Team Flair
+                                Women's Club
                             </label>
                             <select
                                 value={womensFlair}
@@ -216,11 +235,27 @@ export function UserProfile() {
                                 {womensTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
                             </select>
                         </div>
+
+                        {/* NEW WORLD CUP FLAIR DROPDOWN */}
+                        <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-[var(--fifa-gold)] mb-2 ml-1">
+                                World Cup Nation
+                            </label>
+                            <select
+                                value={wcFlair}
+                                onChange={(e) => setWcFlair(e.target.value)}
+                                className="w-full bg-black/50 border border-[var(--fifa-gold)]/50 rounded-xl px-4 py-3 text-sm text-white font-bold outline-none focus:border-[var(--fifa-gold)] transition-colors appearance-none cursor-pointer"
+                                required
+                            >
+                                <option value="" disabled>Select Nation...</option>
+                                {wcTeams.map((t) => <option key={t.id} value={t.name} className="bg-zinc-900">{t.name}</option>)}
+                            </select>
+                        </div>
                     </div>
 
                     <button
                         type="submit"
-                        disabled={saving || !nickname || !mensFlair || !womensFlair || !hasChanges}
+                        disabled={saving || !nickname || !mensFlair || !womensFlair || !wcFlair || !hasChanges}
                         className="w-full group h-14 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
                     >
                         {saving ? "Saving..." : hasChanges ? "Save Changes" : "No Changes"}
@@ -232,7 +267,7 @@ export function UserProfile() {
                     <button
                         onClick={() => {
                             signOut();
-                            setView('home');
+                            navigate('/'); // REPLACE setView WITH navigate
                         }}
                         className="flex items-center gap-2 text-xs text-red-500/80 hover:text-red-400 uppercase tracking-widest font-bold transition-colors mx-auto"
                     >

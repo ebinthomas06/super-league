@@ -1,77 +1,111 @@
-import { useState, useEffect } from 'react';
-import { LeagueProvider, useLeague } from './context/LeagueContext'; // Added useLeague!
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Layout } from './Layout';
+import { LeagueProvider } from './context/LeagueContext';
+import { TopNavbar } from './components/TopNavbar';
 import { Loader } from './components/Loader';
-import { Onboarding } from './pages/Onboarding';
-import { AdminLogin } from './pages/AdminLogin';
-import { AdminDashboard } from './pages/AdminDashboard';
+import { useLocation } from 'react-router-dom';
 import { Login } from './pages/Login';
 
-function AuthGuard() {
+// Pages
+import { Home } from './pages/Home';
+import { Standings } from './pages/Standings';
+import { Teams } from './pages/Teams';
+import { Fantasy } from './pages/Fantasy';
+import { Leaderboard } from './pages/Leaderboard';
+import { ArticleView } from './pages/ArticleView';
+import { AdminLogin } from './pages/AdminLogin';
+import { AdminDashboard } from './pages/AdminDashboard';
+import { Onboarding } from './pages/Onboarding';
+import { UserProfile } from './pages/UserProfile'; // <-- FIXED: Added this missing import!
+
+// Additional Section Pages
+import { Matches } from './pages/Matches';
+import { Vault } from './pages/Vault';
+import { Rules } from './pages/Rules';
+
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+// A smart wrapper to protect routes that require login
+function ProtectedRoute({ children }) {
   const { user, profile, loading } = useAuth();
-  const { setView, setSelectedArticle } = useLeague(); // Bring in our League controls
-  const [initialLoading, setInitialLoading] = useState(true);
+  const location = useLocation();
 
-  // 1. URL INTERCEPTOR
+  if (loading) return <div className="min-h-screen bg-black flex justify-center items-center"><Loader /></div>;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  
+  if (!profile?.nickname || !profile?.team_flair_id) return <Onboarding />;
+
+  return (
+    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto max-w-7xl">
+      <TopNavbar />
+      <main className="animate-in fade-in duration-500">{children}</main>
+    </div>
+  );
+}
+
+// A wrapper for public routes (so they still get the Navbar)
+function PublicRoute({ children }) {
+  return (
+    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 mx-auto max-w-7xl">
+      <TopNavbar />
+      <main className="animate-in fade-in duration-500">{children}</main>
+    </div>
+  );
+}
+
+function GlobalAuthRedirect() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sharedArticleId = params.get('article');
-
-    if (sharedArticleId) {
-      // Send them to the vault/news view
-      setView('article'); 
-      // Set the article ID (ArticleView will fetch the rest of the data!)
-      setSelectedArticle({ id: sharedArticleId }); 
-      
-      // Clean up the URL bar so it looks pretty again
-      window.history.replaceState({}, document.title, window.location.pathname);
+    // Whenever a user logs in, check if they had a saved destination!
+    if (user) {
+      const redirectUrl = sessionStorage.getItem('authRedirect');
+      if (redirectUrl) {
+        sessionStorage.removeItem('authRedirect'); // Clean up
+        navigate(redirectUrl, { replace: true }); // Send them there!
+      }
     }
+  }, [user, navigate]);
 
-    const timer = setTimeout(() => setInitialLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, [setView, setSelectedArticle]);
-
-  if (loading || initialLoading) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <Loader variant="football" text="Loading..." />
-      </div>
-    );
-  }
-
-  if (user && (!profile?.nickname || !profile?.team_flair_id || !profile.womens_team_flair || !profile.wc_team_flair)) {
-    return <Onboarding />;
-  }
-
-  return <Layout />;
+  return null; // This component renders nothing visually
 }
 
 function App() {
-  const path = window.location.pathname;
-
-  if (path === '/hq-login') {
-    return (
-      <AuthProvider>
-        <AdminLogin />
-      </AuthProvider>
-    );
-  }
-
-  if (path === '/admin') {
-    return (
-      <AuthProvider>
-        <LeagueProvider> 
-          <AdminDashboard />
-        </LeagueProvider>
-      </AuthProvider>
-    );
-  }
-
   return (
     <AuthProvider>
       <LeagueProvider>
-        <AuthGuard />
+        <BrowserRouter>
+        <GlobalAuthRedirect />
+          <Routes>
+            {/* Admin Routes (No Standard Navbar) */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/hq-login" element={<AdminLogin />} />
+            <Route path="/admin" element={<AdminDashboard />} />
+
+            {/* Public App Routes */}
+            <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
+            <Route path="/standings" element={<PublicRoute><Standings /></PublicRoute>} />
+            <Route path="/teams" element={<PublicRoute><Teams /></PublicRoute>} />
+            
+            {/* Navigation Sections */}
+            <Route path="/matches" element={<PublicRoute><Matches /></PublicRoute>} />
+            <Route path="/vault" element={<PublicRoute><Vault /></PublicRoute>} />
+            <Route path="/rules" element={<PublicRoute><Rules /></PublicRoute>} />
+            
+            {/* Note the :id syntax! This catches /article/12345 */}
+            <Route path="/article/:id" element={<PublicRoute><ArticleView /></PublicRoute>} />
+
+            {/* Protected Routes (Require Login/Profile) */}
+            <Route path="/fantasy" element={<ProtectedRoute><Fantasy /></ProtectedRoute>} />
+            <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            
+            {/* Catch-all for bad URLs */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </BrowserRouter>
       </LeagueProvider>
     </AuthProvider>
   );
