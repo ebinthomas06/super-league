@@ -1,94 +1,72 @@
 class MetaTagRewriter {
-  constructor(tags) {
-    this.tags = tags;
-  }
+    constructor(tags) {
+        this.tags = tags;
+    }
 
-  element(element) {
-    const property = element.getAttribute("property") || element.getAttribute("name");
-    
-    if (property === "og:title" || property === "twitter:title") {
-      element.setAttribute("content", this.tags.title);
+    element(element) {
+        const property = element.getAttribute("property") || element.getAttribute("name");
+
+        // Match specific tags
+        if (["og:title", "twitter:title"].includes(property)) {
+            element.setAttribute("content", this.tags.title);
+        }
+        if (["og:image", "twitter:image"].includes(property)) {
+            element.setAttribute("content", this.tags.image);
+        }
+        if (["og:description", "twitter:description"].includes(property)) {
+            element.setAttribute("content", this.tags.description);
+        }
     }
-    if (property === "og:image" || property === "twitter:image") {
-      element.setAttribute("content", this.tags.image);
-    }
-    if (property === "og:description" || property === "twitter:description") {
-      element.setAttribute("content", this.tags.description);
-    }
-  }
 }
 
 export async function onRequest(context) {
-  const { request, next, env } = context;
-  const url = new URL(request.url);
-  const path = url.pathname;
-  
-  // Extract ?article= ID from URL
-  const articleId = url.searchParams.get("article");
+    const { request, next, env } = context;
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\/$/, "") || "/";
+    const articleId = url.searchParams.get("article");
 
-  // Fetch the static built assets from Vite
-  const response = await next();
+    const response = await next();
+    if (!response.headers.get("content-type")?.includes("text/html")) return response;
 
-  // Only rewrite HTML documents
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/html")) {
-    return response;
-  }
+    const SCREENSHOT_BASE = "https://your-new-r2-public-url.dev"; // UPDATE THIS
+    const LEGACY_BASE = "https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev";
 
-  // ==========================================
-  // RULE D: The Absolute Fallback
-  // ==========================================
-  let currentTags = {
-    title: "Super League - IIIT Kottayam",
-    description: "Welcome to the Super League at IIIT Kottayam!",
-    image: "https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev/wsl.png"
-  };
+    let currentTags = {
+        title: "Super League - IIIT Kottayam",
+        description: "Welcome to the Super League at IIIT Kottayam!",
+        image: `${LEGACY_BASE}/wsl.png`
+    };
 
-  // ==========================================
-  // RULE A: Dynamic Newsletter Link (Supabase)
-  // ==========================================
-  if (articleId) {
-    try {
-      const supabaseResponse = await fetch(
-        `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${articleId}&select=image_url`,
-        {
-          headers: {
-            "apikey": env.SUPABASE_ANON_KEY,
-            "Authorization": `Bearer ${env.SUPABASE_ANON_KEY}`
-          }
-        }
-      );
-
-      if (supabaseResponse.ok) {
-        const data = await supabaseResponse.json();
-        if (data && data.length > 0 && data[0].image_url) {
-          currentTags.title = "Newsletter | Super League";
-          currentTags.image = data[0].image_url;
-        }
-      }
-    } catch (err) {
-      console.error("Supabase fetch failed:", err);
+    // Newsletter logic
+    if (articleId) {
+        try {
+            const supabaseResponse = await fetch(
+                `${env.SUPABASE_URL}/rest/v1/newsletter?id=eq.${articleId}&select=image_url`,
+                { headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}` } }
+            );
+            const data = await supabaseResponse.json();
+            if (data?.[0]?.image_url) {
+                currentTags.title = "Newsletter | Super League";
+                currentTags.image = data[0].image_url;
+            }
+        } catch (err) { console.error("Supabase failed:", err); }
     }
-  }
-  // ==========================================
-  // RULE B: The Fantasy Route
-  // ==========================================
-  else if (path === "/fantasy" || path === "/fantasy/") {
-    currentTags.title = "FIFA Fantasy League | Super League";
-    currentTags.image = "https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev/World%20cup.png";
-  }
-  // ==========================================
-  // RULE C: Automated Screenshots Mapping
-  // ==========================================
-  else if (["/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
-    const pageName = path.charAt(1).toUpperCase() + path.slice(2);
-    currentTags.title = `${pageName} | Super League`;
-    // Maps exactly to the filenames generated by your GitHub Action
-    currentTags.image = `https://pub-07c808f42c4640ceb3db8a0ef856e898.r2.dev${path}.png`;
-  }
+    // Static Routes
+    else if (path === "/wc" || path === "/fantasy") {
+        currentTags.title = "FIFA Fantasy League | Super League";
+        currentTags.image = `${LEGACY_BASE}/World%20cup.png`;
+    }
+    // Dynamic Screenshot Routes
+    else {
+        const screenshotRoutes = ["/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"];
+        if (screenshotRoutes.includes(path)) {
+            const pageName = path.slice(1).charAt(0).toUpperCase() + path.slice(2);
+            currentTags.title = `${pageName} | Super League`;
+            currentTags.image = `${SCREENSHOT_BASE}${path}.png`;
+        }
+    }
 
-  // Rewrite and send!
-  return new HTMLRewriter()
-    .on('meta', new MetaTagRewriter(currentTags))
-    .transform(response);
+    return new HTMLRewriter()
+        .on("meta", new MetaTagRewriter(currentTags))
+        .transform(response);
 }
