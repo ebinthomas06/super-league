@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+export const dynamic = 'force-dynamic';
+
+const supabaseUrl = process.env.SUPABASE_URL as string;
+const supabaseKey = process.env.SUPABASE_ANON_KEY as string;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(req: Request) {
     try {
@@ -26,7 +30,7 @@ export async function GET(req: Request) {
         // For simplicity, we just fetch from your domain:
         const host = req.headers.get('host');
         const protocol = req.headers.get('x-forwarded-proto') || 'http';
-        
+
         const generatorRes = await fetch(`${protocol}://${host}/api/wc/predictions/knockouts/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -35,7 +39,7 @@ export async function GET(req: Request) {
                 advancing_third_place_groups: savedBracket.advancing_third_place
             })
         });
-        
+
         const generatedBase = await generatorRes.json();
 
         // 3. Return the fully packaged state
