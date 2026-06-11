@@ -294,9 +294,8 @@ export function KnockoutBracket({ onBack }) {
     const submitKnockouts = async () => {
     const finalWinnerId = bracketState.final[0].winnerId;
     
-    // Guard against sending string names instead of UUIDs
-    if (!finalWinnerId || finalWinnerId.length < 15) {
-      alert("Please complete the bracket. (If bracket is stuck, refresh to reload images)");
+    if (!finalWinnerId) {
+      alert("Please complete the entire bracket before submitting!");
       return;
     }
 
@@ -343,6 +342,16 @@ export function KnockoutBracket({ onBack }) {
       alert("Failed to sync with server. Your progress has been saved locally.");
     }
   };
+
+    // PROTECT THE RENDER: If data is still fetching, show the loading screen
+  if (!bracketState || !bracketState.roundOf32) {
+    return (
+      <div className="kb-page">
+        <div className="bg-canvas"><div className="bg-ballgrid"></div></div>
+        <div className="kb-loading font-fifa">Loading Bracket...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="kb-page">
