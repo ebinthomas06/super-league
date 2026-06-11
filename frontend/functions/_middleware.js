@@ -66,8 +66,17 @@ export async function onRequest(context) {
     }
     // Static Route Handling
     else if (["/", "/fantasy", "/wc", "/matches", "/standings", "/clubs", "/statistics", "/legends", "/rules"].includes(path)) {
+        
+        const customNames = {
+            "/": "Home",
+            "/wc": "FIFA World Cup 2026 Fantasy"
+            // You can easily add more here later, e.g., "/faq": "Frequently Asked Questions"
+        };
+
         const filename = path === "/" ? "home" : path.slice(1);
-        const pageName = path === "/" ? "Home" : path.slice(1).charAt(0).toUpperCase() + path.slice(2);
+        
+        // This checks if the path exists in customNames. If not, it falls back to the default capitalization.
+        const pageName = customNames[path] || (path.slice(1).charAt(0).toUpperCase() + path.slice(2));
 
         const descriptions = {
             "/": "Official portal for The Super League at IIIT Kottayam. Access match schedules, recent results, and league announcements.",
