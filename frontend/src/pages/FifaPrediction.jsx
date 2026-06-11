@@ -12,7 +12,7 @@ export function FifaPrediction() {
   const { user, profile, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-
+  
   const goBack=useCallback(()=>{
     navigate(-1);
   },[navigate]);
@@ -46,6 +46,8 @@ export function FifaPrediction() {
   const [hasSelectedThirdPlace, setHasSelectedThirdPlace] = useState(false);
   const [selectedThirdPlaceGroups, setSelectedThirdPlaceGroups] = useState([]);
 
+  const [hasKnockoutPrediction, setHasKnockoutPrediction] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('phase') === 'knockouts') {
@@ -55,22 +57,7 @@ export function FifaPrediction() {
     }
   }, [location.search]);
 
-  useEffect(() => {
-    try {
-      const savedThirds = localStorage.getItem('selectedThirdPlace');
-      if (savedThirds) {
-        const parsed = JSON.parse(savedThirds);
-        if (parsed.length <= 8) {
-          setSelectedThirdPlaceGroups(parsed);
-          if (parsed.length === 8) {
-            setHasSelectedThirdPlace(true);
-          }
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+  
 
   const thirdPlaceTeams = groupStandings ? Object.keys(groupStandings).map(group => {
     return {
@@ -108,6 +95,7 @@ export function FifaPrediction() {
 
   const handleProceedToKnockouts = () => {
     if (selectedThirdPlaceGroups.length === 8) {
+      // FIXED: We absolutely need this so the Knockout UI knows which 8 teams advanced!
       localStorage.setItem('selectedThirdPlace', JSON.stringify(selectedThirdPlaceGroups));
       setHasSelectedThirdPlace(true);
       goToKnockouts();
@@ -192,39 +180,58 @@ export function FifaPrediction() {
     loadGroups();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     if (!user || !dbGroups) return;
     
     async function loadUserPredictions() {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups?user_id=${user.id}`);
-        const json = await res.json();
+        // 1. Fetch Group Stage Predictions
+        const groupRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups?user_id=${user.id}`);
+        const groupJson = await groupRes.json();
         
-        if (json.success && json.data && json.data.length > 0) {
+        if (groupJson.success && groupJson.data && groupJson.data.length > 0) {
           setHasSubmitted(true);
           const standings = {};
           const allTeams = Object.values(dbGroups).flat();
           
           Object.keys(dbGroups).forEach(group => {
-            const pred = json.data.find(p => p.group_name === `Group ${group}`);
+            const pred = groupJson.data.find(p => p.group_name === `Group ${group}`);
             if (pred) {
               standings[group] = [
                 allTeams.find(t => t.id === pred.first_place_id),
                 allTeams.find(t => t.id === pred.second_place_id),
                 allTeams.find(t => t.id === pred.third_place_id),
                 allTeams.find(t => t.id === pred.fourth_place_id)
-              ].filter(Boolean); // fallback
+              ].filter(Boolean);
               
-              if (standings[group].length !== 4) {
-                 standings[group] = dbGroups[group];
-              }
+              if (standings[group].length !== 4) standings[group] = dbGroups[group];
             } else {
               standings[group] = dbGroups[group];
             }
           });
-          
           setGroupStandings(standings);
         }
+
+        // 2. NEW: Fetch Knockout Predictions to update UI buttons
+        // 2. NEW: Fetch Knockout Predictions to update UI buttons
+        const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${user.id}`);
+        const koJson = await koRes.json();
+        
+        if (koJson.success && koJson.data) {
+          setHasKnockoutPrediction(true);
+          
+          // CRITICAL FIX: If they have a knockout bracket, they already picked 3rd place!
+          // We instantly bypass the 3rd place selection UI and restore their choices.
+          setHasSelectedThirdPlace(true);
+          
+          const savedThirds = koJson.data.advancing_third_place_groups;
+          if (savedThirds && savedThirds.length === 8) {
+            setSelectedThirdPlaceGroups(savedThirds);
+            // Save to local storage so the KnockoutBracket component can use it to draw the bracket
+            localStorage.setItem('selectedThirdPlace', JSON.stringify(savedThirds));
+          }
+        }
+
       } catch (err) {
         console.error('Failed to load user predictions from API:', err);
       }
@@ -539,12 +546,12 @@ export function FifaPrediction() {
       console.log("Predictions Submitted to API!");
       alert("Predictions submitted successfully!");
       setHasSubmitted(true);
-      setShowThirdPlaceModal(true); // Automatically show modal after submission
+      setShowThirdPlaceSection(true); // Automatically show modal after submission
     } catch (e) {
       console.error("API submission failed:", e);
       alert("Failed to submit to database. Saving locally instead. " + e.message);
       setHasSubmitted(true);
-      setShowThirdPlaceModal(true);
+      setShowThirdPlaceSection(true);
     }
 
   };
@@ -875,7 +882,7 @@ export function FifaPrediction() {
                   onClick={goToKnockouts}
                   className="premium-proceed-btn"
                 >
-                  Predict Knockout Stages
+                 {hasKnockoutPrediction ? "View Knockout Predictions" : "Predict Knockout Stages"}
                 </button>
               )}
             </div>
@@ -980,7 +987,8 @@ export function FifaPrediction() {
                 <span className="award-subtitle">Top Scorer</span>
               </div>
               <div className="award-input-area">
-                {goldenBoot ? (
+                {/* FIX: Check for ID, not string */}
+                {goldenBootId ? (
                   <div className="award-selected-player">
                     <span className="award-player-name">{goldenBoot}</span>
                     {!isLocked && (
@@ -993,7 +1001,10 @@ export function FifaPrediction() {
                       placeholder="Search for a player..." 
                       value={goldenBoot}
                       onChange={setGoldenBoot}
-                      onSelect={(player) => setGoldenBootId(player.id)}
+                      onSelect={(player) => {
+                        setGoldenBoot(player.name); // Ensure name saves
+                        setGoldenBootId(player.id);
+                      }}
                     />
                   </div>
                 )}
@@ -1007,7 +1018,8 @@ export function FifaPrediction() {
                 <span className="award-subtitle">Best Goalkeeper</span>
               </div>
               <div className="award-input-area">
-                {goldenGlove ? (
+                {/* FIX: Check for ID, not string */}
+                {goldenGloveId ? (
                   <div className="award-selected-player">
                     <span className="award-player-name">{goldenGlove}</span>
                     {!isLocked && (
@@ -1020,7 +1032,10 @@ export function FifaPrediction() {
                       placeholder="Search for a goalkeeper..." 
                       value={goldenGlove}
                       onChange={setGoldenGlove}
-                      onSelect={(player) => setGoldenGloveId(player.id)}
+                      onSelect={(player) => {
+                        setGoldenGlove(player.name);
+                        setGoldenGloveId(player.id);
+                      }}
                       positionFilter="GK"
                     />
                   </div>
@@ -1035,7 +1050,8 @@ export function FifaPrediction() {
                 <span className="award-subtitle">Best Player</span>
               </div>
               <div className="award-input-area">
-                {goldenBall ? (
+                {/* FIX: Check for ID, not string */}
+                {goldenBallId ? (
                   <div className="award-selected-player">
                     <span className="award-player-name">{goldenBall}</span>
                     {!isLocked && (
@@ -1048,7 +1064,10 @@ export function FifaPrediction() {
                       placeholder="Search for a player..." 
                       value={goldenBall}
                       onChange={setGoldenBall}
-                      onSelect={(player) => setGoldenBallId(player.id)}
+                      onSelect={(player) => {
+                        setGoldenBall(player.name);
+                        setGoldenBallId(player.id);
+                      }}
                     />
                   </div>
                 )}
@@ -1081,7 +1100,7 @@ export function FifaPrediction() {
                   onClick={goToKnockouts}
                   className="premium-proceed-btn"
                 >
-                  Predict Knockout Stages
+                  {hasKnockoutPrediction ? "View Knockout Predictions" : "Predict Knockout Stages"}
                 </button>
               )}
             </div>

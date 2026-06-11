@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-<<<<<<< HEAD
 export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = process.env.SUPABASE_ANON_KEY as string;
-const supabase = createClient(supabaseUrl, supabaseKey);
-=======
-const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+// Safely fall back to anon key if service key isn't set, combining both approaches
+const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) as string;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const corsHeaders = {
@@ -21,7 +17,6 @@ const corsHeaders = {
 export async function OPTIONS() {
     return new NextResponse(null, { status: 200, headers: corsHeaders });
 }
->>>>>>> 1413546 (feat(frontend): implement lazy login flow and fix UI/layout glitches in Fifa predictions)
 
 export async function GET(req: Request) {
     try {

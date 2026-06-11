@@ -265,4 +265,174 @@ body.knockout-mode #root > div {
   100% { transform: translate(var(--tx), var(--ty)) scale(0.5) rotate(720deg); opacity: 0; }
 }
 
+/* ==========================================
+   Fullscreen & Landscape Space Maximizer
+   ========================================== */
 
+/* 1. Completely hide the global TopNavbar when in fullscreen mode */
+:fullscreen nav, 
+:-webkit-full-screen nav {
+  display: none !important;
+}
+
+/* 2. Completely hide the bulky Title and Rules header in Fullscreen */
+:fullscreen .kb-header,
+:-webkit-full-screen .kb-header {
+  display: none !important;
+}
+
+/* 3. Strip away top padding from the page in fullscreen */
+:fullscreen .kb-page, 
+:-webkit-full-screen .kb-page {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* 4. Snap the blue R32/R16 header flush to the absolute top of the screen */
+:fullscreen .kb-header-wrapper,
+:-webkit-full-screen .kb-header-wrapper {
+  top: 0 !important;
+}
+
+/* 5. Pull the bracket up closer to the blue header */
+.kb-scroll-container {
+  padding-top: 8px !important; /* Was 20px, pulls the bracket up */
+}
+
+/* ==========================================
+   Mobile/Tablet Adjustments (Portrait & Landscape)
+   ========================================== */
+
+/* Catch all phones, even wide iPhones in landscape mode (up to 950px) */
+@media (max-width: 950px) {
+  
+  /* Always hide the bulky header on mobile/tablets */
+  .kb-header {
+    display: none !important;
+  }
+
+  /* When the phone is held sideways (Landscape) */
+  @media (orientation: landscape) {
+    /* Hide the navbar automatically to save vertical space */
+    nav {
+      display: none !important;
+    }
+    .kb-page {
+      padding-top: 0 !important;
+    }
+    .kb-header-wrapper {
+      top: 0 !important;
+      position:fixed;
+    }
+  }
+
+  /* When the phone is held normally (Portrait) and NOT in fullscreen */
+  @media (orientation: portrait) {
+    .kb-page {
+      padding-top: 72px !important; /* Exactly clears your TopNavbar height */
+    }
+    .kb-header-wrapper {
+      top: 72px !important;
+      min-width: 90vw; /* Snaps perfectly below the TopNavbar */
+    }
+  }
+}
+
+/* ==========================================
+   Ultra-Compact Mobile/Tablet Bracket 
+   ========================================== */
+@media (max-width: 950px) {
+  /* 1. Shrink Headers to match the new 90px columns */
+  .kb-rounds-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+  
+  .kb-round-header-item {
+    width: 90px !important; /* Extremely thin columns */
+    font-size: 12px !important; 
+    text-shadow: none !important;
+  }
+
+  /* 2. Shrink Columns & Horizontal Gaps */
+ .kb-bracket-wrapper {
+  display: flex;
+  gap: 60px;
+  min-height: min-content;
+  position: relative;
+}
+  .kb-round {
+    min-width: 90px !important; 
+    width: 90px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* 3. THE FIX: Squeeze the internal space of the Match Card */
+  .kb-match-wrapper > div {
+    width: 130px !important; /* Forces the box to be narrower, eliminating empty space */
+    min-width: 120px !important;
+  }
+  
+  /* Reduce the padding around the text/buttons inside the card */
+  .mn-team {
+    padding: 7px 9px !important; 
+  }
+  
+  .mn-team-name {
+    font-size: 12px !important; 
+  }
+
+  /* 4. Magic bullet: Uniformly shrink the match cards to 75% 
+     (120px width * 0.75 scale = perfectly fits the 90px column!) */
+  .kb-match-wrapper {
+    transform: scale(0.80); 
+    transform-origin: left center;
+    width: 100%;
+  }
+
+  /* 5. Compact vertical spacing to match the 75% scale */
+  .kb-match-list.r32 { gap: 2px !important; }
+  .kb-match-list.r16 { gap: 48px !important; padding: 24px 0 !important; }
+  .kb-match-list.qf { gap: 138px !important; padding: 69px 0 !important; }
+  .kb-match-list.sf { gap: 318px !important; padding: 159px 0 !important; }
+  
+  /* 6. Shrink Champion Area */
+  .kb-champion-flag { width: 50px !important; height: 50px !important; }
+  .kb-champion-name { font-size: 16px !important; }
+  .kb-final-shield-text { font-size: 11px !important; line-height: 1.2 !important; }
+  .kb-final-shield-container { margin-top: 0px !important; margin-bottom: 0px !important; }
+
+
+.kb-rotate-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  text-align: center;
+  color: white;
+}
+
+@media (min-width: 951px), (orientation: landscape) {
+  .kb-rotate-prompt {
+    display: none;
+  }
+}
+.kb-rotate-prompt {
+  width: 100vw; /* <-- add this */
+}
+
+.kb-bracket-wrapper {
+  display: flex;
+  min-width: 90vw;
+}
+
+.final-round {
+  margin-left:auto;
+}
+}

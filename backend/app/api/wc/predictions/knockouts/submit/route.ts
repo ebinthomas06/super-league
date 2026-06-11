@@ -4,8 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 
 const supabaseUrl = process.env.SUPABASE_URL as string;
-const supabaseKey = process.env.SUPABASE_ANON_KEY as string;
+const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) as string;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+    return new NextResponse(null, { status: 200, headers: corsHeaders });
+}
 
 export async function POST(req: Request) {
     try {
@@ -17,7 +27,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: "Missing required prediction data." }, { status: 400, headers: corsHeaders });
         }
 
-        // Upsert into our new table
+        // The frontend now sends the exact arrays of integer IDs (16, 8, 4, 2)
+        // We can confidently save them directly into the database!
         const { error } = await supabase
             .from('wc_knockout_predictions')
             .upsert({
@@ -29,7 +40,7 @@ export async function POST(req: Request) {
                 final: predictions.final,
                 champion_id: predictions.champion_id,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' }); // Ensures users only have 1 active bracket
+            }, { onConflict: 'user_id' }); 
 
         if (error) throw error;
 
