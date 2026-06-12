@@ -1,8 +1,14 @@
 .kb-page {
   position: relative;
-  min-height: 100vh;
+  min-height: 100%;
   width: 100%;
-  background-color: var(--fifa-bg);
+  background-color: #030303;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(0, 61, 165, 0.55) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 55% at 100% 100%, rgba(75, 32, 127, 0.5) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 45% at 100% 0%, rgba(255, 107, 0, 0.35) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 45% at 0% 100%, rgba(0, 177, 64, 0.15) 0%, transparent 55%);
+  background-attachment: local;
   display: flex;
   flex-direction: column;
 
@@ -35,11 +41,11 @@
 }
 
 .bg-canvas {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
@@ -49,10 +55,19 @@ body.knockout-mode nav.fixed.top-0 {
   position: absolute !important;
 }
 
+body.knockout-mode,
+body.knockout-mode html {
+  background-color: #030303 !important;
+  height: 100%;
+  min-height: 100%;
+}
+
 body.knockout-mode .fifa-page,
 body.knockout-mode #root {
   overflow: visible !important;
   height: auto !important;
+  min-height: 100% !important;
+  background-color: #030303 !important;
 }
 
 body.knockout-mode #root > div {
@@ -60,6 +75,8 @@ body.knockout-mode #root > div {
   padding-right: 0 !important;
   max-width: 100% !important;
 }
+
+
 
 .kb-header {
   display: flex;
@@ -306,14 +323,26 @@ body.knockout-mode #root > div {
 /* Catch all phones, even wide iPhones in landscape mode (up to 950px) */
 @media (max-width: 950px) {
   
-  /* Always hide the bulky header on mobile/tablets */
-  .kb-header {
+  /* On mobile, hide the bulky scoring rules card but keep the title */
+  .kb-header .lb-wrap {
     display: none !important;
+  }
+  .kb-header {
+    padding: 4px 16px 0 !important;
+    margin: 0 !important;
+  }
+  .kb-header h1 {
+    font-size: clamp(1.2rem, 6vw, 1.8rem) !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* When the phone is held sideways (Landscape) */
   @media (orientation: landscape) {
-    /* Hide the navbar automatically to save vertical space */
+    /* Hide title and navbar to save vertical space */
+    .kb-header {
+      display: none !important;
+    }
     nav {
       display: none !important;
     }
@@ -329,11 +358,7 @@ body.knockout-mode #root > div {
   /* When the phone is held normally (Portrait) and NOT in fullscreen */
   @media (orientation: portrait) {
     .kb-page {
-      padding-top: 72px !important; /* Exactly clears your TopNavbar height */
-    }
-    .kb-header-wrapper {
-      top: 72px !important;
-      min-width: 90vw; /* Snaps perfectly below the TopNavbar */
+      padding-top: 0px !important;
     }
   }
 }
@@ -404,27 +429,44 @@ body.knockout-mode #root > div {
   .kb-final-shield-container { margin-top: 0px !important; margin-bottom: 0px !important; }
 
 
-.kb-rotate-prompt {
+.kb-rotate-prompt-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.95);
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  backdrop-filter: blur(5px);
+}
+
+.kb-rotate-prompt-box {
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 32px 20px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 24px;
   text-align: center;
   color: white;
+  position: relative;
+  max-width: 320px;
+  width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
 }
 
 @media (min-width: 951px), (orientation: landscape) {
-  .kb-rotate-prompt {
+  .kb-rotate-prompt-overlay {
     display: none;
   }
-}
-.kb-rotate-prompt {
-  width: 100vw; /* <-- add this */
 }
 
 .kb-bracket-wrapper {
@@ -432,7 +474,4 @@ body.knockout-mode #root > div {
   min-width: 90vw;
 }
 
-.final-round {
-  margin-left:auto;
-}
 }

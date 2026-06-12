@@ -69,9 +69,11 @@ export function KnockoutBracket({ onBack }) {
 
 const [isFullscreen, setIsFullscreen] = useState(false);
 const [showRotatePrompt, setShowRotatePrompt] = useState(false);
+const dismissedRef = useRef(false);
 
 useEffect(() => {
   const checkOrientation = () => {
+    if (dismissedRef.current) return;
     const isMobile = window.innerWidth <= 950;
     const isPortrait = window.innerHeight > window.innerWidth;
     setShowRotatePrompt(isMobile && isPortrait);
@@ -124,7 +126,24 @@ useEffect(() => {
 
   useEffect(() => {
     document.body.classList.add('knockout-mode');
-    return () => document.body.classList.remove('knockout-mode');
+    document.body.style.backgroundColor = '#030303';
+    document.documentElement.style.backgroundColor = '#030303';
+
+    // Lock zoom so the background always covers the content
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    const originalContent = viewportMeta?.getAttribute('content');
+    if (viewportMeta) {
+      viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no');
+    }
+
+    return () => {
+      document.body.classList.remove('knockout-mode');
+      document.body.style.backgroundColor = '';
+      document.documentElement.style.backgroundColor = '';
+      if (viewportMeta && originalContent) {
+        viewportMeta.setAttribute('content', originalContent);
+      }
+    };
   }, []);
 
   const calculateLines = () => {
@@ -459,7 +478,32 @@ useEffect(() => {
     <div className="kb-page">
 
       {showRotatePrompt && (
-  <div className="kb-rotate-prompt">
+  <div className="kb-rotate-prompt-overlay">
+    <div className="kb-rotate-prompt-box">
+      <button 
+        onClick={() => {
+          dismissedRef.current = true;
+          setShowRotatePrompt(false);
+        }}
+        style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          background: 'rgba(255,255,255,0.1)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '32px',
+          height: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          color: 'white',
+          zIndex: 10
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
     <svg
       width="64"
       height="64"
@@ -490,12 +534,13 @@ useEffect(() => {
     </button>
   )}
 
-  {/* Optional message after entering fullscreen */}
-  {isFullscreen && (
-    <p style={{ marginTop: "20px", color: "#FFD700", fontWeight: 600 }}>
-      ✅ Great! Now rotate your device to landscape.
-    </p>
-  )}
+    {/* Optional message after entering fullscreen */}
+    {isFullscreen && (
+      <p style={{ marginTop: "20px", color: "#FFD700", fontWeight: 600 }}>
+        ✅ Great! Now rotate your device to landscape.
+      </p>
+    )}
+    </div>
   </div>
 )}
 
