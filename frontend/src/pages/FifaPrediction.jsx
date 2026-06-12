@@ -882,7 +882,7 @@ export function FifaPrediction() {
                 <div id="groups-view">
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
                     <button onClick={() => setActiveView('home')} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-                      ← Back to Home
+                      ← Collapse
                     </button>
                   </div>
 
@@ -990,7 +990,7 @@ export function FifaPrediction() {
                 <div id="third-place-view">
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
                     <button onClick={() => setActiveView('home')} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-                      ← Back to Home
+                      ← Collapse
                     </button>
                   </div>
 
