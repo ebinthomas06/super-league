@@ -17,9 +17,6 @@ export function FifaPrediction() {
     navigate(-1);
   },[navigate]);
 
-  // The user guards have been removed to allow guest predictions!
-  // We will check for auth during handleSubmit instead.
-
   const [flagAnimationEnabled, setFlagAnimationEnabled] = useState(() => {
     try {
       const saved = localStorage.getItem('flagAnimationEnabled');
@@ -36,17 +33,21 @@ export function FifaPrediction() {
   const PREDICTION_DEADLINE = new Date('2026-06-20T00:00:00Z'); 
   const isPastDeadline = new Date() > PREDICTION_DEADLINE;
   
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  // NEW: Granular submission states
+  const [hasSubmittedAwards, setHasSubmittedAwards] = useState(false);
+  const [hasSubmittedGroups, setHasSubmittedGroups] = useState(false);
+  const [hasKnockoutPrediction, setHasKnockoutPrediction] = useState(false);
 
-  const isLocked = hasSubmitted || isPastDeadline;
+  // NEW: Internal View Router ('home' | 'groups' | 'third_place')
+  const [activeView, setActiveView] = useState('home');
+
+  const isAwardsLocked = hasSubmittedAwards || isPastDeadline;
+  const isGroupsLocked = hasSubmittedGroups || isPastDeadline;
 
   // Knockout phase states
   const [predictionPhase, setPredictionPhase] = useState('groups');
-  const [showThirdPlaceSection, setShowThirdPlaceSection] = useState(false);
   const [hasSelectedThirdPlace, setHasSelectedThirdPlace] = useState(false);
   const [selectedThirdPlaceGroups, setSelectedThirdPlaceGroups] = useState([]);
-
-  const [hasKnockoutPrediction, setHasKnockoutPrediction] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -56,8 +57,6 @@ export function FifaPrediction() {
       setPredictionPhase('groups');
     }
   }, [location.search]);
-
-  
 
   const thirdPlaceTeams = groupStandings ? Object.keys(groupStandings).map(group => {
     return {
@@ -95,23 +94,26 @@ export function FifaPrediction() {
 
   const handleProceedToKnockouts = () => {
     if (selectedThirdPlaceGroups.length === 8) {
-      // FIXED: We absolutely need this so the Knockout UI knows which 8 teams advanced!
       localStorage.setItem('selectedThirdPlace', JSON.stringify(selectedThirdPlaceGroups));
       setHasSelectedThirdPlace(true);
       goToKnockouts();
     }
   };
+
+  // Modified back handler to integrate with our new activeView router
   useEffect(() => {
     const handleFifaBack = () => {
       if (predictionPhase === 'knockouts') {
         setPredictionPhase('groups');
+      } else if (activeView !== 'home') {
+        setActiveView('home');
       } else {
         goBack();
       }
     };
     window.addEventListener('fifaBackClicked', handleFifaBack);
     return () => window.removeEventListener('fifaBackClicked', handleFifaBack);
-  }, [predictionPhase, goBack]);
+  }, [predictionPhase, activeView, goBack]);
 
   useEffect(() => {
     async function loadGroups() {
@@ -146,11 +148,7 @@ export function FifaPrediction() {
                 standings[group] = parsed[group].map(item => {
                   const teamStr = typeof item.team === 'string' ? item.team : (item.name || '');
                   const foundTeam = allTeams.find(t => t.name === teamStr);
-                  
-                  if (foundTeam) {
-                    return { ...foundTeam };
-                  }
-                  
+                  if (foundTeam) return { ...foundTeam };
                   return { name: teamStr };
                 });
               });
@@ -170,7 +168,6 @@ export function FifaPrediction() {
           } catch (e) {
             console.error('Failed to load predictions', e);
           }
-          
           setGroupStandings(loadedStandings || fetchedGroups);
         }
       } catch (err) {
@@ -180,7 +177,7 @@ export function FifaPrediction() {
     loadGroups();
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (!user || !dbGroups) return;
     
     async function loadUserPredictions() {
@@ -190,7 +187,7 @@ useEffect(() => {
         const groupJson = await groupRes.json();
         
         if (groupJson.success && groupJson.data && groupJson.data.length > 0) {
-          setHasSubmitted(true);
+          setHasSubmittedGroups(true);
           const standings = {};
           const allTeams = Object.values(dbGroups).flat();
           
@@ -203,7 +200,6 @@ useEffect(() => {
                 allTeams.find(t => t.id === pred.third_place_id),
                 allTeams.find(t => t.id === pred.fourth_place_id)
               ].filter(Boolean);
-              
               if (standings[group].length !== 4) standings[group] = dbGroups[group];
             } else {
               standings[group] = dbGroups[group];
@@ -212,22 +208,17 @@ useEffect(() => {
           setGroupStandings(standings);
         }
 
-        // 2. NEW: Fetch Knockout Predictions to update UI buttons
-        // 2. NEW: Fetch Knockout Predictions to update UI buttons
+        // 2. Fetch Knockout Predictions
         const koRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/knockouts?user_id=${user.id}`);
         const koJson = await koRes.json();
         
         if (koJson.success && koJson.data) {
           setHasKnockoutPrediction(true);
-          
-          // CRITICAL FIX: If they have a knockout bracket, they already picked 3rd place!
-          // We instantly bypass the 3rd place selection UI and restore their choices.
           setHasSelectedThirdPlace(true);
           
           const savedThirds = koJson.data.advancing_third_place_groups;
           if (savedThirds && savedThirds.length === 8) {
             setSelectedThirdPlaceGroups(savedThirds);
-            // Save to local storage so the KnockoutBracket component can use it to draw the bracket
             localStorage.setItem('selectedThirdPlace', JSON.stringify(savedThirds));
           }
         }
@@ -240,7 +231,6 @@ useEffect(() => {
     loadUserPredictions();
   }, [user, dbGroups]);
 
-  // Load award predictions from DB
   useEffect(() => {
     if (!user) return;
     
@@ -251,18 +241,23 @@ useEffect(() => {
         
         if (json.success && json.data) {
           const d = json.data;
+          let hasAwards = false;
           if (d.golden_boot?.name) {
             setGoldenBoot(d.golden_boot.name);
             setGoldenBootId(d.golden_boot.id);
+            hasAwards = true;
           }
           if (d.golden_glove?.name) {
             setGoldenGlove(d.golden_glove.name);
             setGoldenGloveId(d.golden_glove.id);
+            hasAwards = true;
           }
           if (d.golden_ball?.name) {
             setGoldenBall(d.golden_ball.name);
             setGoldenBallId(d.golden_ball.id);
+            hasAwards = true;
           }
+          if (hasAwards) setHasSubmittedAwards(true);
         }
       } catch (err) {
         console.error('Failed to load award predictions:', err);
@@ -296,17 +291,13 @@ useEffect(() => {
     try { return localStorage.getItem('fifaGoldenBallId') || null; } catch(e) { return null; }
   });
 
-
-  const [draggingTeam, setDraggingTeam] = useState(null); // { group, index }
-  const [dragOverSlot, setDragOverSlot] = useState(null); // "groupName-index"
+  const [draggingTeam, setDraggingTeam] = useState(null); 
+  const [dragOverSlot, setDragOverSlot] = useState(null); 
   const [particles, setParticles] = useState([]);
   const [showHint, setShowHint] = useState(false);
 
-  // Set page title and set up IntersectionObserver AFTER data loads
   useEffect(() => {
     document.title = "FIFA World Cup 2026 — Prediction Challenge";  
-
-    // Wait until the data actually exists before trying to observe the elements!
     if (!dbGroups || !groupStandings) return;
 
     const io = new IntersectionObserver(
@@ -318,12 +309,10 @@ useEffect(() => {
       { threshold: 0.1 }
     );
     
-    // Now it will successfully find the rendered sections
     document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
-
     return () => io.disconnect();
     
-  }, [dbGroups, groupStandings, predictionPhase]); // <-- Added predictionPhase dependency
+  }, [dbGroups, groupStandings, predictionPhase]); 
 
   const handleToggleFlags = (e) => {
     if (e) e.preventDefault();
@@ -341,7 +330,6 @@ useEffect(() => {
     }
   };
 
-  // Spawn dynamic flag particle on click/touch
   const allFlags = [
     "🇨🇦", "🇺🇸", "🇲🇽", "🇯🇲", "🇨🇷", "🇵🇦", "🇹🇹", "🇭🇳", "🇳🇮", "🇧🇿", "🇸🇻", "🇬🇹", "🇨🇼",
     "🇦🇷", "🇧🇷", "🇺🇾", "🇨🇱", "🇨🇴", "🇵🇪", "🇯🇵", "🇰🇷", "🇸🇦", "🇮🇷", "🇦🇪", "🇺🇿", "🇮🇶",
@@ -352,26 +340,13 @@ useEffect(() => {
 
   const spawnParticle = (clientX, clientY) => {
     if (!flagAnimationEnabled) return;
-    
     const id = Math.random().toString(36).substr(2, 9);
     const randomFlag = allFlags[Math.floor(Math.random() * allFlags.length)];
     const randomAnimation = floatAnimations[Math.floor(Math.random() * floatAnimations.length)];
-    const size = Math.random() * 12 + 28; // 28px to 40px
-    
-    const newParticle = {
-      id,
-      x: clientX,
-      y: clientY,
-      flag: randomFlag,
-      animation: randomAnimation,
-      size
-    };
-    
+    const size = Math.random() * 12 + 28; 
+    const newParticle = { id, x: clientX, y: clientY, flag: randomFlag, animation: randomAnimation, size };
     setParticles(prev => [...prev, newParticle]);
-    
-    setTimeout(() => {
-      setParticles(prev => prev.filter(p => p.id !== id));
-    }, 10000); // Clean up after 10s
+    setTimeout(() => { setParticles(prev => prev.filter(p => p.id !== id)); }, 10000);
   };
 
   const handlePageClick = (e) => {
@@ -381,7 +356,6 @@ useEffect(() => {
     spawnParticle(e.clientX, e.clientY);
   };
 
-  // Drag and Drop handlers
   const handleDragStart = (e, group, index) => {
     setDraggingTeam({ group, index });
     e.dataTransfer.effectAllowed = 'move';
@@ -407,44 +381,85 @@ useEffect(() => {
   const handleDrop = (e, targetGroup, targetIndex) => {
     e.preventDefault();
     setDragOverSlot(null);
-    
     if (!draggingTeam) return;
     const { group: sourceGroup, index: sourceIndex } = draggingTeam;
-    
-    if (sourceGroup !== targetGroup) return; // Only swap within the same group
+    if (sourceGroup !== targetGroup) return; 
     
     const updatedTeams = [...groupStandings[targetGroup]];
-    // Swap
     const temp = updatedTeams[sourceIndex];
     updatedTeams[sourceIndex] = updatedTeams[targetIndex];
     updatedTeams[targetIndex] = temp;
     
-    setGroupStandings({
-      ...groupStandings,
-      [targetGroup]: updatedTeams
-    });
+    setGroupStandings({ ...groupStandings, [targetGroup]: updatedTeams });
   };
 
   const moveTeam = (groupName, currentIndex, direction) => {
     const updatedTeams = [...groupStandings[groupName]];
     const targetIndex = currentIndex + direction;
-
-    // Prevent moving out of bounds
     if (targetIndex < 0 || targetIndex >= updatedTeams.length) return;
 
-    // Swap the teams
     const temp = updatedTeams[currentIndex];
     updatedTeams[currentIndex] = updatedTeams[targetIndex];
     updatedTeams[targetIndex] = temp;
 
-    setGroupStandings({
-      ...groupStandings,
-      [groupName]: updatedTeams
-    });
+    setGroupStandings({ ...groupStandings, [groupName]: updatedTeams });
   };
 
-  const handleSubmit = async () => {
-    // 1. Always save to local storage FIRST so we don't lose state on OAuth redirect
+  // Dedicated Award Submitter
+  const handleSubmitAwards = async () => {
+    try {
+      localStorage.setItem('fifaGoldenBoot', goldenBoot);
+      if (goldenBootId) localStorage.setItem('fifaGoldenBootId', goldenBootId);
+      localStorage.setItem('fifaGoldenGlove', goldenGlove);
+      if (goldenGloveId) localStorage.setItem('fifaGoldenGloveId', goldenGloveId);
+      localStorage.setItem('fifaGoldenBall', goldenBall);
+      if (goldenBallId) localStorage.setItem('fifaGoldenBallId', goldenBallId);
+    } catch (e) {
+      console.error("Could not save awards locally:", e);
+    }
+
+    if (!user) {
+      alert("Please sign in to save your predictions! We will redirect you to login.");
+      signInWithGoogle();
+      return;
+    }
+    if (!profile?.wc_team_flair) {
+      alert("Please select your World Cup team flair in your profile before submitting.");
+      navigate('/profile');
+      return;
+    }
+    if (!goldenBootId || !goldenGloveId || !goldenBallId) {
+      alert("Please select predictions for all three awards to continue.");
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const awardsRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/awards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          user_id: user.id,
+          golden_boot_id: goldenBootId,
+          golden_ball_id: goldenBallId,
+          golden_glove_id: goldenGloveId
+        })
+      });
+
+      if (!awardsRes.ok) throw new Error("Awards API request failed");
+      alert("Awards submitted successfully! You have unlocked the bracket.");
+      setHasSubmittedAwards(true);
+    } catch (e) {
+      console.error("API submission failed:", e);
+      alert("Failed to submit to database. Saving locally instead. " + e.message);
+      setHasSubmittedAwards(true);
+    }
+  };
+
+  // Dedicated Group Submitter
+  const handleSubmitGroups = async () => {
     try {
       const legacyPredictions = {};
       Object.keys(groupStandings).forEach(group => {
@@ -454,27 +469,13 @@ useEffect(() => {
         }));
       });
       localStorage.setItem('groupPredictions', JSON.stringify(legacyPredictions));
-      
-      localStorage.setItem('fifaGoldenBoot', goldenBoot);
-      if (goldenBootId) localStorage.setItem('fifaGoldenBootId', goldenBootId);
-      localStorage.setItem('fifaGoldenGlove', goldenGlove);
-      if (goldenGloveId) localStorage.setItem('fifaGoldenGloveId', goldenGloveId);
-      localStorage.setItem('fifaGoldenBall', goldenBall);
-      if (goldenBallId) localStorage.setItem('fifaGoldenBallId', goldenBallId);
     } catch (e) {
-      console.error("Could not save predictions locally:", e);
+      console.error("Could not save groups locally:", e);
     }
 
-    // 2. Check for User Auth
     if (!user) {
-      alert("Please sign in to save your predictions! We will redirect you to login.");
+      alert("Please sign in to save your predictions!");
       signInWithGoogle();
-      return;
-    }
-
-    if (!profile?.wc_team_flair) {
-      alert("Please select your World Cup team flair in your profile before submitting.");
-      navigate('/profile');
       return;
     }
 
@@ -493,67 +494,26 @@ useEffect(() => {
     });
 
     try {
-      const {
-          data: { session }
-        } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-        const token = session?.access_token;
+      const groupRes = await fetch(`${import.meta.env.VITE_API_URL}/wc/predictions/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ user_id: user.id, predictions: groupPredictions })
+      });
 
-      const groupRes = await fetch(
-          `${import.meta.env.VITE_API_URL}/wc/predictions/groups`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              user_id: user.id,
-              predictions: groupPredictions
-            })
-          }
-        );
-      
-      const awardsRes = await fetch(
-        `${import.meta.env.VITE_API_URL}/wc/predictions/awards`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            user_id: user.id,
-            golden_boot_id: goldenBootId,
-            golden_ball_id: goldenBallId,
-            golden_glove_id: goldenGloveId
-          })
-        }
-      );
+      if (!groupRes.ok) throw new Error("Groups API request failed");
 
-      if (!groupRes.ok) {
-        console.log(await groupRes.text());
-      }
-
-      if (!awardsRes.ok) {
-        console.log(await awardsRes.text());
-      }
-
-      if (!groupRes.ok || !awardsRes.ok) {
-        throw new Error("API request failed");
-      }
-
-      console.log("Predictions Submitted to API!");
-      alert("Predictions submitted successfully!");
-      setHasSubmitted(true);
-      setShowThirdPlaceSection(true); // Automatically show modal after submission
+      alert("Group stages submitted successfully! Proceeding to Top 32...");
+      setHasSubmittedGroups(true);
+      setActiveView('third_place');
     } catch (e) {
       console.error("API submission failed:", e);
       alert("Failed to submit to database. Saving locally instead. " + e.message);
-      setHasSubmitted(true);
-      setShowThirdPlaceSection(true);
+      setHasSubmittedGroups(true);
+      setActiveView('third_place');
     }
-
   };
 
   useEffect(() => {
@@ -563,11 +523,9 @@ useEffect(() => {
         const json = await res.json();
         
         if (json.success) {
-          // Filter out anyone who doesn't have a World Cup flair set
           const filteredLeaderboard = json.data.filter(
             player => player.user_profiles && player.user_profiles.wc_team_flair
           );
-          
           setLeaderboard(filteredLeaderboard);
         }
       } catch (err) {
@@ -581,51 +539,30 @@ useEffect(() => {
   useEffect(() => {
     setPortalTarget(document.getElementById('navbar-portal-target'));
   }, []);
+
   const toggleContent = (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button 
           onClick={handleToggleFlags}
           title="Toggle background flag animations"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '50px',
-            padding: '4px 10px',
-            fontSize: '11px',
-            fontWeight: '600',
-            color: '#fff',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease'
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: '50px', padding: '4px 10px', fontSize: '11px', fontWeight: '600',
+            color: '#fff', cursor: 'pointer', transition: 'all 0.2s ease'
         }}
       >
-        <span style={{ 
-          color: flagAnimationEnabled ? '#00e676' : '#ff5252',
-          fontWeight: '800'
-        }}>
+        <span style={{ color: flagAnimationEnabled ? '#00e676' : '#ff5252', fontWeight: '800' }}>
           Flags {flagAnimationEnabled ? 'ON' : 'OFF'}
         </span>
       </button>
 
       {showHint && (
         <div style={{
-          position: 'absolute',
-          top: '130%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#ffffff',
-          color: '#000000',
-          padding: '6px 12px',
-          borderRadius: '8px',
-          fontSize: '11px',
-          fontWeight: '800',
-          whiteSpace: 'nowrap',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          animation: 'fadeUp 0.3s ease forwards',
-          pointerEvents: 'none',
-          zIndex: 100
+          position: 'absolute', top: '130%', left: '50%', transform: 'translateX(-50%)',
+          background: '#ffffff', color: '#000000', padding: '6px 12px', borderRadius: '8px',
+          fontSize: '11px', fontWeight: '800', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+          animation: 'fadeUp 0.3s ease forwards', pointerEvents: 'none', zIndex: 100
         }}>
           Click anywhere on the screen!
         </div>
@@ -647,24 +584,21 @@ useEffect(() => {
   }
 
   if (predictionPhase === 'knockouts') {
-  return (
-    <KnockoutBracket
-      onBack={(refresh = false) => {
-        navigate('/wc');
-
-        if (refresh) {
-          window.location.reload();
-        }
-      }}
-    />
-  );
-}
+    return (
+      <KnockoutBracket
+        onBack={(refresh = false) => {
+          navigate('/wc');
+          if (refresh) {
+            window.location.reload();
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fifa-prediction-page" onClick={handlePageClick}>
       {portalTarget && createPortal(toggleContent, portalTarget)}
-      
-
 
       <div className="bg-canvas">
         <div className="bg-ring bg-ring-1"></div>
@@ -680,73 +614,29 @@ useEffect(() => {
         <div className="bg-corner-br"></div>
       </div>
 
-      {/* Dynamic Flag Particles */}
       {particles.map(p => (
-        <div
-          key={p.id}
-          className={`dynamic-flag ${p.animation}`}
-          style={{
-            left: p.x,
-            top: p.y,
-            fontSize: `${p.size}px`,
-            transform: 'translate(-50%, -50%)',
-            position: 'fixed'
-          }}
-        >
+        <div key={p.id} className={`dynamic-flag ${p.animation}`} style={{ left: p.x, top: p.y, fontSize: `${p.size}px`, transform: 'translate(-50%, -50%)', position: 'fixed' }}>
           {p.flag}
         </div>
       ))}
 
-      {/* Floating Country Flags */}
       <div className="particles-wrap" aria-hidden="true" style={{ display: flagAnimationEnabled ? 'block' : 'none' }}>
-        <div className="pt">🇨🇦</div>
-        <div className="pt">🇺🇸</div>
-        <div className="pt">🇲🇽</div>
-        <div className="pt">🇯🇲</div>
-        <div className="pt">🇨🇷</div>
-        <div className="pt">🇵🇦</div>
-        <div className="pt">🇹🇹</div>
-        <div className="pt">🇭🇳</div>
-        <div className="pt">🇳🇮</div>
-        <div className="pt">🇧🇿</div>
-        <div className="pt">🇸🇻</div>
-        <div className="pt">🇬🇹</div>
-        <div className="pt">🇨🇼</div>
-        <div className="pt">🇦🇷</div>
-        <div className="pt">🇧🇷</div>
-        <div className="pt">🇺🇾</div>
-        <div className="pt">🇨🇱</div>
-        <div className="pt">🇨🇴</div>
-        <div className="pt">🇵🇪</div>
-        <div className="pt">🇯🇵</div>
-        <div className="pt">🇰🇷</div>
-        <div className="pt">🇸🇦</div>
-        <div className="pt">🇮🇷</div>
-        <div className="pt">🇦🇪</div>
-        <div className="pt">🇺🇿</div>
-        <div className="pt">🇮🇶</div>
-        <div className="pt">🇦🇺</div>
-        <div className="pt">🇨🇲</div>
-        <div className="pt">🇰🇪</div>
-        <div className="pt">🇲🇦</div>
-        <div className="pt">🇬🇭</div>
-        <div className="pt">🇦🇴</div>
-        <div className="pt">🇫🇷</div>
-        <div className="pt">🇬🇧</div>
-        <div className="pt">🇩🇪</div>
-        <div className="pt">🇪🇸</div>
-        <div className="pt">🇮🇹</div>
-        <div className="pt">🇳🇱</div>
-        <div className="pt">🇧🇪</div>
-        <div className="pt">🇵🇹</div>
-        <div className="pt">🇦🇹</div>
-        <div className="pt">🇨🇭</div>
-        <div className="pt">🇷🇸</div>
-        <div className="pt">🇭🇷</div>
-        <div className="pt">🇵🇱</div>
-        <div className="pt">🇸🇪</div>
-        <div className="pt">🇷🇴</div>
-        <div className="pt">🇺🇦</div>
+        <div className="pt">🇨🇦</div><div className="pt">🇺🇸</div><div className="pt">🇲🇽</div>
+        <div className="pt">🇯🇲</div><div className="pt">🇨🇷</div><div className="pt">🇵🇦</div>
+        <div className="pt">🇹🇹</div><div className="pt">🇭🇳</div><div className="pt">🇳🇮</div>
+        <div className="pt">🇧🇿</div><div className="pt">🇸🇻</div><div className="pt">🇬🇹</div>
+        <div className="pt">🇨🇼</div><div className="pt">🇦🇷</div><div className="pt">🇧🇷</div>
+        <div className="pt">🇺🇾</div><div className="pt">🇨🇱</div><div className="pt">🇨🇴</div>
+        <div className="pt">🇵🇪</div><div className="pt">🇯🇵</div><div className="pt">🇰🇷</div>
+        <div className="pt">🇸🇦</div><div className="pt">🇮🇷</div><div className="pt">🇦🇪</div>
+        <div className="pt">🇺🇿</div><div className="pt">🇮🇶</div><div className="pt">🇦🇺</div>
+        <div className="pt">🇨🇲</div><div className="pt">🇰🇪</div><div className="pt">🇲🇦</div>
+        <div className="pt">🇬🇭</div><div className="pt">🇦🇴</div><div className="pt">🇫🇷</div>
+        <div className="pt">🇬🇧</div><div className="pt">🇩🇪</div><div className="pt">🇪🇸</div>
+        <div className="pt">🇮🇹</div><div className="pt">🇳🇱</div><div className="pt">🇧🇪</div>
+        <div className="pt">🇵🇹</div><div className="pt">🇦🇹</div><div className="pt">🇨🇭</div>
+        <div className="pt">🇷🇸</div><div className="pt">🇭🇷</div><div className="pt">🇵🇱</div>
+        <div className="pt">🇸🇪</div><div className="pt">🇷🇴</div><div className="pt">🇺🇦</div>
       </div>
 
       <div className="page" style={{ paddingBottom: '100px' }}>
@@ -756,34 +646,21 @@ useEffect(() => {
           </h1>
         </header>
 
-        {/* Top Dash Sections */}
         <div className="user-dash-top">
-          
-          {/* Standings/Login Card */}
           {user ? (
                 <div className="premium-glass-card" style={{ flex: 1, width: '100%', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                    
-                    {/* Rank */}
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                       <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '800', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: '4px' }}>Rank</span>
                       <span className="font-fifa" style={{ fontSize: '28px', color: '#fff', lineHeight: '1' }}>{profile?.rank || '-'}</span>
                     </div>
-
-                    {/* Avatar */}
                     <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', flexShrink: '0', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                       {userTeam ? (
-                        <img 
-                          src={userTeam.logo_url} 
-                          alt={userTeam.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }}
-                        />
+                        <img src={userTeam.logo_url} alt={userTeam.name} style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#fff' }} />
                       ) : (
                         <span style={{ fontSize: '11px', fontWeight: '800', color: 'rgba(255,255,255,0.5)' }}>YOU</span>
                       )}
                     </div>
-                    
-                    {/* Info */}
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                       <p className="font-fifa" style={{ fontSize: '20px', color: '#fff', lineHeight: '1', letterSpacing: '0.05em', marginBottom: '4px' }}>
                         {profile?.nickname || 'Predictor'}
@@ -795,8 +672,6 @@ useEffect(() => {
                       )}
                     </div>
                   </div>
-                  
-                  {/* Points */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }}>
                     <div className="font-fifa" style={{ fontSize: '32px', color: '#fff', lineHeight: '1', marginBottom: '4px' }}>
                       {leaderboard.find(p => p.user_profiles?.nickname === profile?.nickname)?.points || 0}
@@ -810,467 +685,418 @@ useEffect(() => {
             <div className="lb-wrap" style={{ flex: 1, minWidth: '320px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', textAlign: 'center', background: 'rgba(0, 0, 0, 0.8)' }}>
               <h3 className="font-fifa" style={{ fontSize: '24px', color: 'white', marginBottom: '8px' }}>LOGIN REQUIRED</h3>
               <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '14px', marginBottom: '16px' }}>You must log in to participate and submit predictions.</p>
-              <button 
-                onClick={signInWithGoogle}
-                style={{ background: 'var(--fifa-cyan)', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}
-              >
+              <button onClick={signInWithGoogle} style={{ background: 'var(--fifa-cyan)', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}>
                 Sign in with Google
               </button>
             </div>
           )}
 
-          {/* Scoring rules */}
           <div className="lb-wrap" style={{ flex: 1, minWidth: '320px', background: 'rgba(0, 0, 0, 0.8)' }}>
             <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
               <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>HOW TO PLAY</span>
             </div>
             <div className="dash-rules" style={{ padding: '20px 24px' }}>
               <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
-                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 1: PREDICT GROUP STAGES</div>
+                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 1: TOURNAMENT AWARDS</div>
                 <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Rank the four teams in each of the 12 groups from 1st to 4th place. The top two teams from every group will automatically advance to the knockout rounds.
+                  Start by predicting the overall tournament superstars to unlock the main brackets.
                 </div>
               </div>
-              
               <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
-                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 2: THIRD-PLACE TEAMS</div>
+                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 2: GROUP STAGES</div>
                 <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Because the 2026 tournament features an expanded format with 12 groups, the top two teams from each group only provide 24 advancing teams. To complete the 32-team knockout bracket, you must review your 3rd-place finishers and select the 8 best teams to advance.
+                  Rank the four teams in each of the 12 groups. Select your best 3rd-place advancing teams to complete the Top 32.
                 </div>
               </div>
-              
               <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '24px' }}>
                 <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 3: KNOCKOUT BRACKET</div>
                 <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Once your final 32 teams are locked in, the system will automatically generate your knockout bracket. Simply select the winner of each matchup to advance them to the next round, continuing until you have chosen your tournament champion.
+                  Select the winner of each knockout matchup to advance them to the next round, continuing until you have chosen your champion.
                 </div>
               </div>
-              
               <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.1)', marginBottom: '24px' }}></div>
-              
               <h4 style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Scoring Rules</h4>
-
               <div className="dash-rule-row">
                 <div className="rule-badge" style={{ background: 'var(--fifa-green)' }}>GROUP STAGES</div>
-                <div className="rule-text">
-                  <span className="rule-highlight">5 Points</span> for each team placed in their exact correct standing.
-                </div>
+                <div className="rule-text"><span className="rule-highlight">5 Points</span> for each team placed in their exact correct standing.</div>
               </div>
               <div className="dash-rule-row">
                 <div className="rule-badge" style={{ background: 'var(--fifa-gold)' }}>AWARDS</div>
-                <div className="rule-text">
-                  <span className="rule-highlight">100 Points</span> for predicting the Golden Boot, Glove, or Ball.
-                </div>
+                <div className="rule-text"><span className="rule-highlight">100 Points</span> for predicting the Golden Boot, Glove, or Ball.</div>
               </div>
             </div>
           </div>
-
         </div>
+
         <div className="fifa-desktop-layout">
           <div className="fifa-main-content">
-
-        <section className="section" id="groups">
-          <div className="sh" style={{ marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
-              PREDICT THE GROUP <span style={{ color: 'var(--fifa-gold)' }}>STAGES</span>
-            </h2>
-            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500', marginTop: '12px', fontSize: '15px', maxWidth: '500px' }}>
-              Drag and position teams in each group to predict the group stage standings
-            </p>
-          </div>
-          {isLocked && (
-            <div className="premium-glass-card" style={{
-              padding: '24px 32px',
-              marginBottom: '40px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '12px',
-              maxWidth: '650px',
-              margin: '0 auto 40px auto'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', textAlign: 'center' }}>
-                <span className="font-fifa" style={{ color: 'var(--fifa-gold)', fontSize: '24px', letterSpacing: '2px', textAlign: 'center', lineHeight: '1.2' }}>
-                  PREDICTIONS LOCKED
-                </span>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '15px', margin: '0 0 16px 0', textAlign: 'center', fontWeight: '500' }}>
-                {isPastDeadline 
-                  ? "The deadline for Group Stage predictions has officially passed." 
-                  : "Predictions already made for the Group Stage. Proceed to the knockouts!"}
-              </p>
+            <section className="section">
               
-              {!hasSelectedThirdPlace ? (
-                <button 
-                  onClick={() => {
-                    setShowThirdPlaceSection(true);
-                    setTimeout(() => {
-                      document.getElementById('third-place-section')?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="premium-proceed-btn"
-                >
-                  Proceed to round of 32
-                </button>
-              ) : (
-                <button 
-                  onClick={goToKnockouts}
-                  className="premium-proceed-btn"
-                >
-                 {hasKnockoutPrediction ? "View Knockout Predictions" : "Predict Knockout Stages"}
-                </button>
-              )}
-            </div>
-          )}
-          <div className="groups-container">
-            {Object.keys(groupStandings).map((groupName) => (
-              <div className="group-card" key={groupName}>
-                <div className="group-header-row">
-                  <div className="group-header">GROUP {groupName}</div>
+              {/* =======================
+                  VIEW 1: AWARDS & HOME
+                  ======================= */}
+              {activeView === 'home' && (
+                <div id="awards-home">
+                  <div className="sh" style={{ marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
+                      TOURNAMENT <span style={{ color: 'var(--fifa-gold)' }}>AWARDS</span>
+                    </h2>
+                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500', marginTop: '12px', fontSize: '15px', maxWidth: '500px' }}>
+                      Predict the award winners to unlock the group and knockout stages!
+                    </p>
+                  </div>
+
+                  <div className="awards-container" style={{ marginBottom: '40px' }}>
+                    {/* Golden Boot */}
+                    <div className="award-card">
+                      <div className="award-icon-area">
+                        <span className="award-title font-fifa">GOLDEN BOOT</span>
+                        <span className="award-subtitle">Top Scorer</span>
+                      </div>
+                      <div className="award-input-area">
+                        {goldenBootId ? (
+                          <div className="award-selected-player">
+                            <span className="award-player-name">{goldenBoot}</span>
+                            {!isAwardsLocked && (
+                              <button className="award-clear-btn" onClick={() => { setGoldenBoot(''); setGoldenBootId(null); }}>✕</button>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ pointerEvents: isAwardsLocked ? 'none' : 'auto', opacity: isAwardsLocked ? 0.5 : 1 }}>
+                            <AutocompleteInput 
+                              placeholder="Search for a player..." 
+                              value={goldenBoot}
+                              onChange={setGoldenBoot}
+                              onSelect={(player) => { setGoldenBoot(player.name); setGoldenBootId(player.id); }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Golden Glove */}
+                    <div className="award-card">
+                      <div className="award-icon-area">
+                        <span className="award-title font-fifa">GOLDEN GLOVE</span>
+                        <span className="award-subtitle">Best Goalkeeper</span>
+                      </div>
+                      <div className="award-input-area">
+                        {goldenGloveId ? (
+                          <div className="award-selected-player">
+                            <span className="award-player-name">{goldenGlove}</span>
+                            {!isAwardsLocked && (
+                              <button className="award-clear-btn" onClick={() => { setGoldenGlove(''); setGoldenGloveId(null); }}>✕</button>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ pointerEvents: isAwardsLocked ? 'none' : 'auto', opacity: isAwardsLocked ? 0.5 : 1 }}>
+                            <AutocompleteInput 
+                              placeholder="Search for a goalkeeper..." 
+                              value={goldenGlove}
+                              onChange={setGoldenGlove}
+                              onSelect={(player) => { setGoldenGlove(player.name); setGoldenGloveId(player.id); }}
+                              positionFilter="GK"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Golden Ball */}
+                    <div className="award-card">
+                      <div className="award-icon-area">
+                        <span className="award-title font-fifa">GOLDEN BALL</span>
+                        <span className="award-subtitle">Best Player</span>
+                      </div>
+                      <div className="award-input-area">
+                        {goldenBallId ? (
+                          <div className="award-selected-player">
+                            <span className="award-player-name">{goldenBall}</span>
+                            {!isAwardsLocked && (
+                              <button className="award-clear-btn" onClick={() => { setGoldenBall(''); setGoldenBallId(null); }}>✕</button>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ pointerEvents: isAwardsLocked ? 'none' : 'auto', opacity: isAwardsLocked ? 0.5 : 1 }}>
+                            <AutocompleteInput 
+                              placeholder="Search for a player..." 
+                              value={goldenBall}
+                              onChange={setGoldenBall}
+                              onSelect={(player) => { setGoldenBall(player.name); setGoldenBallId(player.id); }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                    
+                  {!hasSubmittedAwards ? (
+                    <div className="submit-section">
+                      <button className="submit-btn" onClick={handleSubmitAwards}>
+                        SUBMIT AWARDS
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="premium-glass-card" style={{ padding: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', maxWidth: '650px', margin: '0 auto 40px auto' }}>
+                      <h3 className="font-fifa" style={{ color: 'var(--fifa-gold)', fontSize: '24px', textAlign: 'center', margin: 0 }}>BRACKETS UNLOCKED</h3>
+                      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+                        
+                        {!hasSubmittedGroups && (
+                          <button className="premium-proceed-btn" onClick={() => setActiveView('groups')} style={{ flex: '1', minWidth: '200px' }}>
+                            Predict Group Stage
+                          </button>
+                        )}
+
+                        {hasSubmittedGroups && !hasKnockoutPrediction && (
+                          <>
+                            <button className="premium-proceed-btn" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', flex: '1', minWidth: '200px' }} onClick={() => setActiveView('groups')}>
+                              View Group Stage Prediction
+                            </button>
+                            <button className="premium-proceed-btn" onClick={() => setActiveView('third_place')} style={{ flex: '1', minWidth: '200px' }}>
+                              Proceed to Knockout
+                            </button>
+                          </>
+                        )}
+
+                        {hasSubmittedGroups && hasKnockoutPrediction && (
+                          <>
+                            <button className="premium-proceed-btn" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', flex: '1', minWidth: '200px' }} onClick={() => setActiveView('groups')}>
+                              View Group Stage Prediction
+                            </button>
+                            <button className="premium-proceed-btn" onClick={goToKnockouts} style={{ flex: '1', minWidth: '200px' }}>
+                              View Knockout Stage Prediction
+                            </button>
+                          </>
+                        )}
+
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="group-list-container">
-                  <div className="group-list" data-group={groupName}>
-                    {groupStandings[groupName].map((team, idx) => {
-                      const isAdvancing = idx < 2;
-                      const slotKey = `${groupName}-${idx}`;
-                      const isDraggingThis = draggingTeam && draggingTeam.group === groupName && draggingTeam.index === idx;
-                      const positionText = ["1st", "2nd", "3rd", "4th"][idx];
-                      
-                      return (
-                        <div className="group-row" key={idx}>
-                          <div className="rank-label">{positionText}</div>
-                          <div
-                            className={`group-slot ${isAdvancing ? 'advancing' : 'eliminated'} ${
-                              dragOverSlot === slotKey ? 'drag-over' : ''
-                            }`}
-                            data-position={idx + 1}
-                            onDragOver={(e) => handleDragOver(e, groupName, idx)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, groupName, idx)}
-                          >
-                            <div
-                              className={`team-card ${isAdvancing ? '' : 'eliminated'} ${
-                                isDraggingThis ? 'dragging' : ''
-                              }`}
-                              draggable={!isLocked}
-                              onDragStart={(e) => handleDragStart(e, groupName, idx)}
-                              onDragEnd={handleDragEnd}
-                              data-team={team.name}
-                            >
-                              <div className="team-info" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: '8px' }}>
-  <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ flexShrink: 0 }} />
-  <span className="team-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</span>
-</div>
+              )}
 
-{/* NEW: Mobile-friendly Up/Down Buttons */}
-{!isLocked && (
-  <>
-  <div className="mobile-move-controls" style={{ display: 'flex', flexDirection: 'column', marginRight: '4px', flexShrink: 0 }}>
-  <button 
-    onClick={(e) => { e.preventDefault(); moveTeam(groupName, idx, -1); }}
-    disabled={idx === 0}
-    style={{ 
-      background: 'transparent', border: 'none', padding: '0px 8px', fontSize: '12px',
-      color: idx === 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)',
-      cursor: idx === 0 ? 'default' : 'pointer'
-    }}
-  >
-    ▲
-  </button>
-  <button 
-    onClick={(e) => { e.preventDefault(); moveTeam(groupName, idx, 1); }}
-    disabled={idx === 3}
-    style={{ 
-      background: 'transparent', border: 'none', padding: '0px 8px', fontSize: '12px',
-      color: idx === 3 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)',
-      cursor: idx === 3 ? 'default' : 'pointer'
-    }}
-  >
-    ▼
-  </button>
-</div>
-</>
-)}
+              {/* =======================
+                  VIEW 2: GROUP STAGES
+                  ======================= */}
+              {activeView === 'groups' && (
+                <div id="groups-view">
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
+                    <button onClick={() => setActiveView('home')} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+                      ← Back to Home
+                    </button>
+                  </div>
 
-{/* Existing Desktop Drag Handle */}
-<div className="drag-handle" style={{ opacity: 0.5 }}>
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-</div>
+                  <div className="sh" style={{ marginBottom: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
+                      PREDICT THE GROUP <span style={{ color: 'var(--fifa-gold)' }}>STAGES</span>
+                    </h2>
+                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500', marginTop: '12px', fontSize: '15px', maxWidth: '500px' }}>
+                      Drag and position teams in each group to predict the group stage standings
+                    </p>
+                  </div>
+
+                  {isGroupsLocked && (
+                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                      <span className="font-fifa" style={{ color: 'var(--fifa-gold)', fontSize: '24px', letterSpacing: '2px' }}>PREDICTIONS LOCKED</span>
+                      <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '15px', marginTop: '8px' }}>You have already submitted your Group Stage predictions.</p>
+                    </div>
+                  )}
+
+                  <div className="groups-container">
+                    {Object.keys(groupStandings).map((groupName) => (
+                      <div className="group-card" key={groupName}>
+                        <div className="group-header-row">
+                          <div className="group-header">GROUP {groupName}</div>
+                        </div>
+                        <div className="group-list-container">
+                          <div className="group-list" data-group={groupName}>
+                            {groupStandings[groupName].map((team, idx) => {
+                              const isAdvancing = idx < 2;
+                              const slotKey = `${groupName}-${idx}`;
+                              const isDraggingThis = draggingTeam && draggingTeam.group === groupName && draggingTeam.index === idx;
+                              const positionText = ["1st", "2nd", "3rd", "4th"][idx];
+                              
+                              return (
+                                <div className="group-row" key={idx}>
+                                  <div className="rank-label">{positionText}</div>
+                                  <div
+                                    className={`group-slot ${isAdvancing ? 'advancing' : 'eliminated'} ${dragOverSlot === slotKey ? 'drag-over' : ''}`}
+                                    data-position={idx + 1}
+                                    onDragOver={(e) => handleDragOver(e, groupName, idx)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDrop(e, groupName, idx)}
+                                  >
+                                    <div
+                                      className={`team-card ${isAdvancing ? '' : 'eliminated'} ${isDraggingThis ? 'dragging' : ''}`}
+                                      draggable={!isGroupsLocked}
+                                      onDragStart={(e) => handleDragStart(e, groupName, idx)}
+                                      onDragEnd={handleDragEnd}
+                                      data-team={team.name}
+                                    >
+                                      <div className="team-info" style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                                        <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ flexShrink: 0 }} />
+                                        <span className="team-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.name}</span>
+                                      </div>
+                                      {!isGroupsLocked && (
+                                        <>
+                                          <div className="mobile-move-controls" style={{ display: 'flex', flexDirection: 'column', marginRight: '4px', flexShrink: 0 }}>
+                                            <button onClick={(e) => { e.preventDefault(); moveTeam(groupName, idx, -1); }} disabled={idx === 0} style={{ background: 'transparent', border: 'none', padding: '0px 8px', fontSize: '12px', color: idx === 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)', cursor: idx === 0 ? 'default' : 'pointer' }}>▲</button>
+                                            <button onClick={(e) => { e.preventDefault(); moveTeam(groupName, idx, 1); }} disabled={idx === 3} style={{ background: 'transparent', border: 'none', padding: '0px 8px', fontSize: '12px', color: idx === 3 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)', cursor: idx === 3 ? 'default' : 'pointer' }}>▼</button>
+                                          </div>
+                                          <div className="drag-handle" style={{ opacity: 0.5 }}>
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {!isGroupsLocked && (
+                    <div className="submit-section" style={{ marginTop: '40px' }}>
+                      <button className="submit-btn" onClick={handleSubmitGroups}>
+                        SUBMIT GROUP STAGES
+                      </button>
+                    </div>
+                  )}
+
+                  {isGroupsLocked && (
+                    <div className="submit-section" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center' }}>
+                      {!hasKnockoutPrediction ? (
+                        <button className="premium-proceed-btn" onClick={() => setActiveView('third_place')}>
+                          Proceed to Knockout
+                        </button>
+                      ) : (
+                        <button className="premium-proceed-btn" onClick={goToKnockouts}>
+                          View Knockout Stage Prediction
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* =======================
+                  VIEW 3: THIRD PLACE
+                  ======================= */}
+              {activeView === 'third_place' && (
+                <div id="third-place-view">
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
+                    <button onClick={() => setActiveView('home')} style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+                      ← Back to Home
+                    </button>
+                  </div>
+
+                  <div className="sh" style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                    <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
+                      CHOOSE THE BEST THIRD PLACE <span style={{ color: 'var(--fifa-gold)' }}>TEAMS</span>
+                    </h2>
+                  </div>
+
+                  {!hasSelectedThirdPlace ? (
+                    <>
+                      <div className="lb-wrap" style={{ width: '100%', maxWidth: '800px', margin: '0 auto 32px', background: 'rgba(0,0,0,0.5)' }}>
+                        <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
+                          <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>SCORING RULES</span>
+                        </div>
+                        <div className="dash-rules" style={{ padding: '20px 24px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>Correct 3rd Place Advancing:</span>
+                              <span style={{ color: '#fff', fontSize: '14px' }}><span className="rule-highlight">5 points</span> each</span>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 16px' }}>
+                        <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                          <div style={{ padding: '16px 16px 0', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '700', margin: '0 0 16px 0', fontSize: '14px', letterSpacing: '0.1em' }}>
+                              {selectedThirdPlaceGroups.length}/8 SELECTED
+                            </p>
+                          </div>
+                          <div className="group-list-container">
+                            <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
+                              {thirdPlaceTeams.map(({ group, team }) => {
+                                const isSelected = selectedThirdPlaceGroups.includes(group);
+                                const isDisabled = !isSelected && selectedThirdPlaceGroups.length >= 8;
+
+                                return (
+                                  <div 
+                                    key={group} 
+                                    className={`team-card ${isSelected ? 'selected' : ''}`}
+                                    onClick={() => !isDisabled && toggleThirdPlaceSelection(group)}
+                                    style={{
+                                      cursor: isDisabled ? 'not-allowed' : 'pointer', opacity: isDisabled ? 0.4 : 1, display: 'flex',
+                                      alignItems: 'center', padding: '12px', background: isSelected ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255,255,255,0.05)',
+                                      border: isSelected ? '2px solid #FFFFFF' : '1px solid rgba(255,255,255,0.1)', borderRadius: '8px',
+                                      boxShadow: isSelected ? '0 0 10px rgba(255,255,255,0.3)' : 'none'
+                                    }}
+                                  >
+                                    <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                                      <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
+                                      <span className="team-name">{team.name}</span>
+                                    </div>
+                                    {isSelected && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="submit-section" style={{ marginTop: '32px' }}>
+                        <button 
+                          className="submit-btn" 
+                          disabled={selectedThirdPlaceGroups.length !== 8}
+                          onClick={handleProceedToKnockouts}
+                          style={{
+                            background: selectedThirdPlaceGroups.length === 8 ? 'var(--fifa-gold)' : 'rgba(255,255,255,0.1)',
+                            color: selectedThirdPlaceGroups.length === 8 ? '#000' : 'rgba(255,255,255,0.3)',
+                            cursor: selectedThirdPlaceGroups.length === 8 ? 'pointer' : 'not-allowed'
+                          }}
+                        >
+                          Confirm 8 Teams
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 16px' }}>
+                      <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+                        <div className="group-list-container">
+                          <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
+                            {thirdPlaceTeams.filter(t => selectedThirdPlaceGroups.includes(t.group)).map(({ group, team }) => {
+                              return (
+                                <div key={group} className="team-card selected" style={{ display: 'flex', alignItems: 'center', padding: '12px', background: 'rgba(0, 0, 0, 0.6)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '8px' }}>
+                                  <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                                    <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
+                                    <span className="team-name">{team.name}</span>
+                                  </div>
+                                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'rgba(255,255,255,0.4)', marginLeft: '12px' }}>Group {group}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Tournament Awards Section */}
-          <div className="sh" style={{ marginTop: '60px', marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-            <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
-              TOURNAMENT <span style={{ color: 'var(--fifa-gold)' }}>AWARDS</span>
-            </h2>
-          </div>
-
-          <div className="awards-container" style={{ marginBottom: '40px' }}>
-            {/* Golden Boot */}
-            <div className="award-card">
-              <div className="award-icon-area">
-                <span className="award-title font-fifa">GOLDEN BOOT</span>
-                <span className="award-subtitle">Top Scorer</span>
-              </div>
-              <div className="award-input-area">
-                {/* FIX: Check for ID, not string */}
-                {goldenBootId ? (
-                  <div className="award-selected-player">
-                    <span className="award-player-name">{goldenBoot}</span>
-                    {!isLocked && (
-                      <button className="award-clear-btn" onClick={() => { setGoldenBoot(''); setGoldenBootId(null); }}>✕</button>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.5 : 1 }}>
-                    <AutocompleteInput 
-                      placeholder="Search for a player..." 
-                      value={goldenBoot}
-                      onChange={setGoldenBoot}
-                      onSelect={(player) => {
-                        setGoldenBoot(player.name); // Ensure name saves
-                        setGoldenBootId(player.id);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Golden Glove */}
-            <div className="award-card">
-              <div className="award-icon-area">
-                <span className="award-title font-fifa">GOLDEN GLOVE</span>
-                <span className="award-subtitle">Best Goalkeeper</span>
-              </div>
-              <div className="award-input-area">
-                {/* FIX: Check for ID, not string */}
-                {goldenGloveId ? (
-                  <div className="award-selected-player">
-                    <span className="award-player-name">{goldenGlove}</span>
-                    {!isLocked && (
-                      <button className="award-clear-btn" onClick={() => { setGoldenGlove(''); setGoldenGloveId(null); }}>✕</button>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.5 : 1 }}>
-                    <AutocompleteInput 
-                      placeholder="Search for a goalkeeper..." 
-                      value={goldenGlove}
-                      onChange={setGoldenGlove}
-                      onSelect={(player) => {
-                        setGoldenGlove(player.name);
-                        setGoldenGloveId(player.id);
-                      }}
-                      positionFilter="GK"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Golden Ball */}
-            <div className="award-card">
-              <div className="award-icon-area">
-                <span className="award-title font-fifa">GOLDEN BALL</span>
-                <span className="award-subtitle">Best Player</span>
-              </div>
-              <div className="award-input-area">
-                {/* FIX: Check for ID, not string */}
-                {goldenBallId ? (
-                  <div className="award-selected-player">
-                    <span className="award-player-name">{goldenBall}</span>
-                    {!isLocked && (
-                      <button className="award-clear-btn" onClick={() => { setGoldenBall(''); setGoldenBallId(null); }}>✕</button>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ pointerEvents: isLocked ? 'none' : 'auto', opacity: isLocked ? 0.5 : 1 }}>
-                    <AutocompleteInput 
-                      placeholder="Search for a player..." 
-                      value={goldenBall}
-                      onChange={setGoldenBall}
-                      onSelect={(player) => {
-                        setGoldenBall(player.name);
-                        setGoldenBallId(player.id);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-            
-          {!isLocked ? (
-            <div className="submit-section">
-              <button className="submit-btn" id="submitBtn" onClick={handleSubmit}>
-                SUBMIT PREDICTIONS
-              </button>
-            </div>
-          ) : (
-            <div className="submit-section" style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-              {!hasSelectedThirdPlace ? (
-                <button 
-                  onClick={() => {
-                    setShowThirdPlaceSection(true);
-                    setTimeout(() => {
-                      document.getElementById('third-place-section')?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  }}
-                  className="premium-proceed-btn"
-                >
-                  Proceed to round of 32
-                </button>
-              ) : (
-                <button 
-                  onClick={goToKnockouts}
-                  className="premium-proceed-btn"
-                >
-                  {hasKnockoutPrediction ? "View Knockout Predictions" : "Predict Knockout Stages"}
-                </button>
               )}
-            </div>
-          )}
 
-          {showThirdPlaceSection && !hasSelectedThirdPlace && (
-            <div id="third-place-section" style={{ marginTop: '60px' }}>
-              <div className="sh" style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
-                  CHOOSE THE BEST THIRD PLACE <span style={{ color: 'var(--fifa-gold)' }}>TEAM</span>
-                </h2>
-              </div>
-
-              {/* Third Place Scoring Rules */}
-              <div className="lb-wrap" style={{ width: '100%', maxWidth: '800px', margin: '0 auto 32px', background: 'rgba(0,0,0,0.5)' }}>
-                <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
-                  <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>SCORING RULES</span>
-                </div>
-                <div className="dash-rules" style={{ padding: '20px 24px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold' }}>Correct 3rd Place Advancing:</span>
-                      <span style={{ color: '#fff', fontSize: '14px' }}><span className="rule-highlight">5 points</span> each</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 16px' }}>
-                <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                  <div style={{ padding: '16px 16px 0', textAlign: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '700', margin: '0 0 16px 0', fontSize: '14px', letterSpacing: '0.1em' }}>
-                      {selectedThirdPlaceGroups.length}/8 SELECTED
-                    </p>
-                  </div>
-                  <div className="group-list-container">
-                    <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
-                      {thirdPlaceTeams.map(({ group, team }) => {
-                        const isSelected = selectedThirdPlaceGroups.includes(group);
-                        const isDisabled = !isSelected && selectedThirdPlaceGroups.length >= 8;
-
-                        return (
-                          <div 
-                            key={group} 
-                            className={`team-card ${isSelected ? 'selected' : ''}`}
-                            onClick={() => !isDisabled && toggleThirdPlaceSelection(group)}
-                            style={{
-                              cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              opacity: isDisabled ? 0.4 : 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '12px',
-                              background: isSelected ? 'rgba(0, 0, 0, 0.6)' : 'rgba(255,255,255,0.05)',
-                              border: isSelected ? '2px solid #FFFFFF' : '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: '8px',
-                              boxShadow: isSelected ? '0 0 10px rgba(255,255,255,0.3)' : 'none'
-                            }}
-                          >
-                            <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                              <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
-                              <span className="team-name">{team.name}</span>
-                            </div>
-                            {isSelected && (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="submit-section" style={{ marginTop: '32px' }}>
-                <button 
-                  className="submit-btn" 
-                  disabled={selectedThirdPlaceGroups.length !== 8}
-                  onClick={handleProceedToKnockouts}
-                  style={{
-                    background: selectedThirdPlaceGroups.length === 8 ? 'var(--fifa-gold)' : 'rgba(255,255,255,0.1)',
-                    color: selectedThirdPlaceGroups.length === 8 ? '#000' : 'rgba(255,255,255,0.3)',
-                    cursor: selectedThirdPlaceGroups.length === 8 ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  Confirm 8 Teams
-                </button>
-              </div>
-            </div>
-          )}
-
-          {hasSelectedThirdPlace && (
-            <div style={{ marginTop: '60px' }}>
-              <div className="sh" style={{ marginBottom: '32px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                <h2 className="font-fifa-italic" style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: 'white', lineHeight: '1.2', letterSpacing: '0.05em' }}>
-                  QUALIFIED THIRD PLACE <span style={{ color: 'var(--fifa-gold)' }}>TEAMS</span>
-                </h2>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 16px' }}>
-                <div className="group-card" style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                  <div className="group-list-container">
-                    <div className="group-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px', padding: '16px' }}>
-                      {thirdPlaceTeams.filter(t => selectedThirdPlaceGroups.includes(t.group)).map(({ group, team }) => {
-                        return (
-                          <div 
-                            key={group} 
-                            className="team-card selected"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '12px',
-                              background: 'rgba(0, 0, 0, 0.6)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              borderRadius: '8px'
-                            }}
-                          >
-                            <div className="team-info" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                              <img src={team.logo_url} alt={team.name} className="team-flag-img" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
-                              <span className="team-name">{team.name}</span>
-                            </div>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'rgba(255,255,255,0.4)', marginLeft: '12px' }}>Group {group}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
+            </section>
           </div>
+          
+          {/* LEADERBOARD SIDEBAR */}
           <div className="fifa-side-content">
             <section className="section">
               <div className="sh">
@@ -1279,21 +1105,16 @@ useEffect(() => {
                   Leaderboard
                 </div>
               </div>
-              
-              {/* Added maxHeight and overflowY so the 80+ users scroll inside this box instead of stretching the page! */}
               <div className="lb-wrap" style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '10px' }}>
                 <div className="lb-hdr">
                   <span className="lb-hdr-t font-fifa">Top Predictors</span>
                 </div>
-
                 {leaderboard.map((player, idx) => {
-                  // Determine medal colors for top 3
                   let rankColor = '#fff';
                   if (idx === 0) rankColor = 'var(--fifa-gold)';
                   else if (idx === 1) rankColor = '#c0c0c0';
                   else if (idx === 2) rankColor = '#cd7f32';
 
-                  // Find the logo for their flair
                   const playerFlair = player.user_profiles?.wc_team_flair;
                   const playerTeam = playerFlair ? allTeams.find(t => t.name === playerFlair) : null;
 

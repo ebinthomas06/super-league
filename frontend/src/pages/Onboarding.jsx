@@ -128,7 +128,7 @@ export function Onboarding() {
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2 ml-1">
-                World Cup Flair
+                World Cup Champion
               </label>
               <select
                 value={wcFlair}
