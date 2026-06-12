@@ -690,42 +690,6 @@ export function FifaPrediction() {
               </button>
             </div>
           )}
-
-          <div className="lb-wrap" style={{ flex: 1, minWidth: '320px', background: 'rgba(0, 0, 0, 0.8)' }}>
-            <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
-              <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>HOW TO PLAY</span>
-            </div>
-            <div className="dash-rules" style={{ padding: '20px 24px' }}>
-              <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
-                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 1: TOURNAMENT AWARDS</div>
-                <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Start by predicting the overall tournament superstars to unlock the main brackets.
-                </div>
-              </div>
-              <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
-                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 2: GROUP STAGES</div>
-                <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Rank the four teams in each of the 12 groups. Select your best 3rd-place advancing teams to complete the Top 32.
-                </div>
-              </div>
-              <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '24px' }}>
-                <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 3: KNOCKOUT BRACKET</div>
-                <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
-                  Select the winner of each knockout matchup to advance them to the next round, continuing until you have chosen your champion.
-                </div>
-              </div>
-              <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.1)', marginBottom: '24px' }}></div>
-              <h4 style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Scoring Rules</h4>
-              <div className="dash-rule-row">
-                <div className="rule-badge" style={{ background: 'var(--fifa-green)' }}>GROUP STAGES</div>
-                <div className="rule-text"><span className="rule-highlight">5 Points</span> for each team placed in their exact correct standing.</div>
-              </div>
-              <div className="dash-rule-row">
-                <div className="rule-badge" style={{ background: 'var(--fifa-gold)' }}>AWARDS</div>
-                <div className="rule-text"><span className="rule-highlight">100 Points</span> for predicting the Golden Boot, Glove, or Ball.</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="fifa-desktop-layout">
@@ -893,6 +857,42 @@ export function FifaPrediction() {
                     <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontWeight: '500', marginTop: '12px', fontSize: '15px', maxWidth: '500px' }}>
                       Drag and position teams in each group to predict the group stage standings
                     </p>
+                  </div>
+
+                  <div className="lb-wrap" style={{ width: '100%', maxWidth: '800px', margin: '0 auto 40px auto', background: 'rgba(0, 0, 0, 0.8)' }}>
+                    <div className="lb-hdr" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(0, 0, 0, 0.2)', justifyContent: 'center', padding: '16px' }}>
+                      <span className="lb-hdr-t font-fifa" style={{ fontSize: '20px' }}>HOW TO PLAY</span>
+                    </div>
+                    <div className="dash-rules" style={{ padding: '20px 24px' }}>
+                      <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
+                        <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 1: TOURNAMENT AWARDS</div>
+                        <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
+                          Start by predicting the overall tournament superstars to unlock the main brackets.
+                        </div>
+                      </div>
+                      <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '20px' }}>
+                        <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 2: GROUP STAGES</div>
+                        <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
+                          Rank the four teams in each of the 12 groups. Select your best 3rd-place advancing teams to complete the Top 32.
+                        </div>
+                      </div>
+                      <div className="dash-rule-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '8px', marginBottom: '24px' }}>
+                        <div className="rule-badge" style={{ background: 'white', color: '#000' }}>STEP 3: KNOCKOUT BRACKET</div>
+                        <div className="rule-text" style={{ fontSize: '12px', lineHeight: '1.5', color: 'rgba(255,255,255,0.8)' }}>
+                          Select the winner of each knockout matchup to advance them to the next round, continuing until you have chosen your champion.
+                        </div>
+                      </div>
+                      <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.1)', marginBottom: '24px' }}></div>
+                      <h4 style={{ color: 'white', fontSize: '14px', fontWeight: 'bold', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Scoring Rules</h4>
+                      <div className="dash-rule-row">
+                        <div className="rule-badge" style={{ background: 'var(--fifa-green)' }}>GROUP STAGES</div>
+                        <div className="rule-text"><span className="rule-highlight">5 Points</span> for each team placed in their exact correct standing.</div>
+                      </div>
+                      <div className="dash-rule-row">
+                        <div className="rule-badge" style={{ background: 'var(--fifa-gold)' }}>AWARDS</div>
+                        <div className="rule-text"><span className="rule-highlight">100 Points</span> for predicting the Golden Boot, Glove, or Ball.</div>
+                      </div>
+                    </div>
                   </div>
 
                   {isGroupsLocked && (
