@@ -10,8 +10,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // The 16 "Home" slots based on the 48-team World Cup matrix
 const R32_HOME_SLOTS = [
-    "2A", "1E", "1F", "1C", "1I", "2E", "1A", "1L",
-    "1D", "1G", "2K", "1H", "1B", "1J", "1K", "2D"
+    // Top half (Feeds the left side of the bracket)
+    "1E", "1I", "2A", "1F", "2K", "1H", "1D", "1G",
+    // Bottom half (Feeds the right side of the bracket)
+    "1C", "2E", "1A", "1L", "1J", "2D", "1B", "1K"
 ];
 
 const corsHeaders = {
