@@ -7,6 +7,9 @@ const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY) as string;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Set the global deadline (Midnight IST entering June 21st)
+const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00+05:30');
+
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -19,6 +22,14 @@ export async function OPTIONS() {
 
 export async function POST(req: Request) {
     try {
+        // 1. DEADLINE CHECK: Blocks any submissions after June 20th 11:59:59 PM IST
+        if (new Date() > PREDICTION_DEADLINE) {
+            return NextResponse.json({ 
+                success: false, 
+                error: 'Deadline passed. Predictions are locked.' 
+            }, { status: 403, headers: corsHeaders });
+        }
+
         const body = await req.json();
         const { user_id, advancing_third_place_groups, predictions } = body;
 
