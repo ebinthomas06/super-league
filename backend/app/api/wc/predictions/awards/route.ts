@@ -8,7 +8,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Set the global deadline
-const PREDICTION_DEADLINE = new Date('2026-06-20T00:00:00Z');
+const PREDICTION_DEADLINE = new Date('2026-06-22T00:00:00Z');
 
 // GET: Retrieve a user's award predictions
 export async function GET(request: NextRequest) {
