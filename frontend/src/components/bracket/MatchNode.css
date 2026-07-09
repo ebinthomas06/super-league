@@ -106,3 +106,23 @@
   /* Optionally add an inner circle or leave solid */
   box-shadow: inset 0 0 0 2px rgba(0,0,0,0.8);
 }
+/* --- GRADING STYLES --- */
+.mn-team.winner.correct-prediction {
+  background: rgba(0, 230, 118, 0.15);
+  border-color: #00e676; /* Green */
+}
+
+.mn-team.winner.correct-prediction .mn-circle.filled {
+  border-color: #00e676;
+  background: #00e676;
+}
+
+.mn-team.winner.incorrect-prediction {
+  background: rgba(255, 51, 51, 0.15);
+  border-color: #ff3333; /* Red */
+}
+
+.mn-team.winner.incorrect-prediction .mn-circle.filled {
+  border-color: #ff3333;
+  background: #ff3333;
+}

@@ -5,6 +5,22 @@ import './KnockoutBracket.css';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
+//OFFICIAL TOURNAMENT RESULTS
+const OFFICIAL_R16 = ["Canada", "Morocco", "Paraguay", "France", "Brazil", "Norway", "Mexico", "England", "Portugal", "Spain", "United States", "Belgium", "Argentina", "Egypt", "Switzerland", "Colombia"];
+const OFFICIAL_QF = [
+  "France", 
+  "Morocco", 
+  "Spain", 
+  "Belgium", 
+  "Norway", 
+  "England", 
+  "Argentina", 
+  "Switzerland"
+];
+const OFFICIAL_SF = [];      // Max capacity: 4
+const OFFICIAL_FINAL = [];   // Max capacity: 2
+const OFFICIAL_CHAMPION = []; // Max capacity: 1
+
 const FullScreenConfetti = () => {
     const [particles, setParticles] = useState([]);
 
@@ -641,7 +657,8 @@ export function KnockoutBracket({ onBack }) {
                             <div className="kb-match-list r32">
                                 {bracketState.roundOf32.map(m => (
                                     <div className="kb-match-wrapper" key={m.id} data-match-id={m.id}>
-                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} />
+                                        {/* R32 winners advance to R16. Target = 16 */}
+                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} officialAdvances={OFFICIAL_R16} roundCapacity={16} />
                                     </div>
                                 ))}
                             </div>
@@ -651,7 +668,8 @@ export function KnockoutBracket({ onBack }) {
                             <div className="kb-match-list r16">
                                 {bracketState.roundOf16.map(m => (
                                     <div className="kb-match-wrapper" key={m.id} data-match-id={m.id}>
-                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} />
+                                        {/* R16 winners advance to QF. Target = 8 */}
+                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} officialAdvances={OFFICIAL_QF} roundCapacity={8} />
                                     </div>
                                 ))}
                             </div>
@@ -661,7 +679,8 @@ export function KnockoutBracket({ onBack }) {
                             <div className="kb-match-list qf">
                                 {bracketState.quarterFinals.map(m => (
                                     <div className="kb-match-wrapper" key={m.id} data-match-id={m.id}>
-                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} />
+                                        {/* QF winners advance to SF. Target = 4 */}
+                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} officialAdvances={OFFICIAL_SF} roundCapacity={4} />
                                     </div>
                                 ))}
                             </div>
@@ -671,13 +690,14 @@ export function KnockoutBracket({ onBack }) {
                             <div className="kb-match-list sf">
                                 {bracketState.semiFinals.map(m => (
                                     <div className="kb-match-wrapper" key={m.id} data-match-id={m.id}>
-                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} />
+                                        {/* SF winners advance to Final. Target = 2 */}
+                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} officialAdvances={OFFICIAL_FINAL} roundCapacity={2} />
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        <div className="kb-round final-round">
+                       <div className="kb-round final-round">
                             <div className="kb-match-list final" style={{ position: 'relative' }}>
                                 {bracketState.final[0].winnerId && (
                                     <div className="kb-champion">
@@ -709,7 +729,8 @@ export function KnockoutBracket({ onBack }) {
 
                                 {bracketState.final.map(m => (
                                     <div className="kb-match-wrapper" key={m.id} data-match-id={m.id}>
-                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} isFinal={true} />
+                                        {/* Final winner advances to Champion. Target = 1 */}
+                                        <MatchNode match={m} onSelectWinner={handleSelectWinner} isFinal={true} officialAdvances={OFFICIAL_CHAMPION} roundCapacity={1} />
                                     </div>
                                 ))}
 
