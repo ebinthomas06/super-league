@@ -1,7 +1,7 @@
 import React from 'react';
 import './MatchNode.css';
 
-export function MatchNode({ match, onSelectWinner, disabled, isFinal }) {
+export function MatchNode({ match, onSelectWinner, disabled, isFinal, officialAdvances, roundCapacity }) {
   const { team1, team2, winnerId, id } = match;
 
   const handleSelect = (team) => {
@@ -29,9 +29,17 @@ export function MatchNode({ match, onSelectWinner, disabled, isFinal }) {
     const isWinner = winnerId && team.id && winnerId === team.id;
     const isLoser = winnerId && team.id && winnerId !== team.id;
 
+    // --- GRADING LOGIC ---
+    let gradeClass = '';
+    if (isWinner && officialAdvances && roundCapacity && officialAdvances.length === roundCapacity) {
+        // Check if the team the user picked is actually in the official array
+        const isCorrect = officialAdvances.includes(team.name);
+        gradeClass = isCorrect ? 'correct-prediction' : 'incorrect-prediction';
+    }
+
     return (
       <div 
-        className={`mn-team selectable ${isWinner ? 'winner' : ''} ${isLoser ? 'loser' : ''}`}
+        className={`mn-team selectable ${isWinner ? 'winner' : ''} ${isLoser ? 'loser' : ''} ${gradeClass}`}
         onClick={() => handleSelect(team)}
       >
         {team.logo_url ? (
