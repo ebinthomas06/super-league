@@ -17,7 +17,13 @@ const OFFICIAL_QF = [
   "Argentina", 
   "Switzerland"
 ];
-const OFFICIAL_SF = [];      // Max capacity: 4
+const OFFICIAL_SF = [
+  "France",
+  "Spain",
+  "England",
+  "Argentina"
+]; // Max capacity: 4
+
 const OFFICIAL_FINAL = [];   // Max capacity: 2
 const OFFICIAL_CHAMPION = []; // Max capacity: 1
 
